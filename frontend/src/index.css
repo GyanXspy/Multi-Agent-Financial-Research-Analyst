@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* ─── Custom Theme ─── */
+@theme {
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  --color-red-400: #f87171;
+  --color-amber-400: #fbbf24;
+}
+
+/* ─── Global Base Styles ─── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-100);
+  font-family: var(--font-sans);
+}
+
+/* ─── Scrollbar Styling ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-slate-900);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-700);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-slate-600);
+}
+
+/* ─── Markdown Prose Overrides (dark theme) ─── */
+.prose-report {
+  color: var(--color-slate-200);
+  line-height: 1.75;
+}
+
+.prose-report h1,
+.prose-report h2,
+.prose-report h3 {
+  color: var(--color-slate-50);
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose-report h1 { font-size: 1.75rem; }
+.prose-report h2 { font-size: 1.35rem; border-bottom: 1px solid var(--color-slate-800); padding-bottom: 0.3em; }
+.prose-report h3 { font-size: 1.1rem; }
+
+.prose-report p {
+  margin: 0.75em 0;
+}
+
+.prose-report ul,
+.prose-report ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.prose-report li {
+  margin: 0.25em 0;
+}
+
+.prose-report table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.875rem;
+}
+
+.prose-report th {
+  background-color: var(--color-slate-800);
+  color: var(--color-emerald-400);
+  padding: 0.5em 0.75em;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-slate-700);
+}
+
+.prose-report td {
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--color-slate-800);
+}
+
+.prose-report tr:hover td {
+  background-color: var(--color-slate-900);
+}
+
+.prose-report strong {
+  color: var(--color-slate-50);
+}
+
+.prose-report code {
+  background-color: var(--color-slate-800);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.prose-report blockquote {
+  border-left: 3px solid var(--color-emerald-500);
+  padding-left: 1em;
+  margin-left: 0;
+  color: var(--color-slate-400);
+  font-style: italic;
+}
+
+/* ─── Animations ─── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--color-slate-800) 25%, var(--color-slate-700) 50%, var(--color-slate-800) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
