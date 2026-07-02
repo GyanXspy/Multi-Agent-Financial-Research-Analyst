@@ -3,15 +3,18 @@ Peer Comparison Agent — Identifies industry peers and computes
 relative valuation metrics for competitive analysis.
 """
 
+import asyncio
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yfinance as yf
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _fetch_info(symbol: str) -> Dict:
+    """Blocking yfinance info fetch — always call via asyncio.to_thread."""
+    return yf.Ticker(symbol).info or {}
 
 # Sector → default peer tickers mapping
 SECTOR_PEERS: Dict[str, List[str]] = {
@@ -32,25 +35,17 @@ SECTOR_PEERS: Dict[str, List[str]] = {
 class PeerComparisonAgent:
     """Evaluates a company's performance relative to industry competitors."""
 
-    def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-            model=settings.FINANCIAL_MODEL,
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.1,
-            max_retries=3,
-        )
-
     async def collect(self, symbol: str) -> Dict[str, Any]:
         """
         Identify peers and fetch comparable financial metrics.
+        Peer lookups run concurrently in worker threads.
 
         Returns a dict with 'sector', 'target' metrics, and 'peers' list.
         """
         logger.info("PeerComparisonAgent: collecting peers for %s", symbol)
 
         try:
-            main_ticker = yf.Ticker(symbol)
-            main_info = main_ticker.info
+            main_info = await asyncio.to_thread(_fetch_info, symbol)
         except Exception as e:
             logger.error("PeerComparisonAgent: failed to fetch info for %s: %s", symbol, e)
             return {"sector": "Unknown", "target": {}, "peers": [], "error": str(e)}
@@ -64,18 +59,18 @@ class PeerComparisonAgent:
         # Get peer symbols — exclude the target company
         peer_symbols = self._get_peers(sector, symbol)
 
-        # Fetch metrics for each peer
-        peers_data = []
-        for peer_sym in peer_symbols:
+        # Fetch all peers concurrently
+        async def fetch_peer(peer_sym: str) -> Optional[Dict[str, Any]]:
             try:
-                peer_ticker = yf.Ticker(peer_sym)
-                peer_info = peer_ticker.info
-                peer_metrics = self._extract_metrics(peer_info, peer_sym)
-                if peer_metrics.get("market_cap"):  # Only include if we got real data
-                    peers_data.append(peer_metrics)
+                peer_info = await asyncio.to_thread(_fetch_info, peer_sym)
+                metrics = self._extract_metrics(peer_info, peer_sym)
+                return metrics if metrics.get("market_cap") else None
             except Exception as e:
                 logger.warning("PeerComparisonAgent: failed to fetch peer %s: %s", peer_sym, e)
-                continue
+                return None
+
+        peer_results = await asyncio.gather(*(fetch_peer(p) for p in peer_symbols))
+        peers_data = [p for p in peer_results if p is not None]
 
         result = {
             "sector": sector,

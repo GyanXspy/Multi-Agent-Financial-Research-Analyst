@@ -1,14 +1,29 @@
 """
 Financial Data Agent — Retrieves quantitative financial information
 from Yahoo Finance (yfinance) and computes valuation & operational metrics.
+
+All yfinance calls are blocking, so they run in a worker thread via
+asyncio.to_thread — this keeps the multi-agent fan-out genuinely parallel.
 """
 
+import asyncio
 import logging
 from typing import Any, Dict
 
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+
+def _fetch_all(symbol: str) -> Dict[str, Any]:
+    """Blocking bundle: info, 1y history, and financial statements in one thread hop."""
+    ticker = yf.Ticker(symbol)
+    return {
+        "info": ticker.info,
+        "history": ticker.history(period="1y"),
+        "income_stmt": ticker.income_stmt,
+        "balance_sheet": ticker.balance_sheet,
+    }
 
 
 class FinancialDataAgent:
@@ -24,12 +39,15 @@ class FinancialDataAgent:
         logger.info("FinancialDataAgent: collecting data for %s", symbol)
 
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            history = ticker.history(period="1y")
+            bundle = await asyncio.to_thread(_fetch_all, symbol)
         except Exception as e:
-            logger.error("FinancialDataAgent: failed to fetch ticker info for %s: %s", symbol, e)
+            logger.error("FinancialDataAgent: failed to fetch data for %s: %s", symbol, e)
             return {"error": str(e)}
+
+        info = bundle["info"] or {}
+        history = bundle["history"]
+        income_stmt = bundle["income_stmt"]
+        balance_sheet = bundle["balance_sheet"]
 
         # --- Valuation Metrics (directly from info) ---
         pe_ratio = info.get("trailingPE")
@@ -45,9 +63,6 @@ class FinancialDataAgent:
         ebitda_margin = None
 
         try:
-            income_stmt = ticker.income_stmt
-            balance_sheet = ticker.balance_sheet
-
             if income_stmt is not None and not income_stmt.empty:
                 revenue = income_stmt.loc["Total Revenue"].iloc[0] if "Total Revenue" in income_stmt.index else None
                 net_income = income_stmt.loc["Net Income"].iloc[0] if "Net Income" in income_stmt.index else None
@@ -79,10 +94,13 @@ class FinancialDataAgent:
             margin_raw = info.get("ebitdaMargins")
             ebitda_margin = round(margin_raw * 100, 2) if margin_raw is not None else None
 
-        # --- Price History (last 30 daily close prices) ---
+        # --- Price History (1 year, weekly closes ≈ 52 points — chart-friendly) ---
         price_history = []
-        if not history.empty:
-            price_history = history["Close"].tolist()[-30:]
+        history_dates = []
+        if history is not None and not history.empty:
+            weekly = history["Close"].resample("W").last().dropna()
+            price_history = [round(float(p), 2) for p in weekly.tolist()]
+            history_dates = [d.strftime("%Y-%m-%d") for d in weekly.index]
 
         result = {
             "company_name": info.get("shortName", symbol),
@@ -103,6 +121,7 @@ class FinancialDataAgent:
             "sector": info.get("sector"),
             "industry": info.get("industry"),
             "price_history_1y": price_history,
+            "price_history_dates": history_dates,
         }
 
         logger.info("FinancialDataAgent: completed for %s — price=%s", symbol, result["current_price"])

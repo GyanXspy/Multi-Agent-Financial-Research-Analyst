@@ -6,6 +6,7 @@ aggregates results, and invokes the Thesis Writer for final report generation.
 
 import asyncio
 import logging
+import re
 from typing import Any, Dict
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -18,6 +19,10 @@ from app.agents.thesis_writer import ThesisWriterAgent
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Valid Yahoo Finance ticker shape: optional ^ prefix (indices), then
+# uppercase letters/digits/dots/hyphens, max 12 chars (e.g. AAPL, RELIANCE.NS, ^GSPC)
+TICKER_RE = re.compile(r"^\^?[A-Z0-9.\-]{1,12}$")
 
 
 class CoordinatorAgent:
@@ -53,7 +58,7 @@ class CoordinatorAgent:
         logger.info("CoordinatorAgent: starting pipeline for query: %s", query)
 
         # Step 1: Extract ticker symbol
-        symbol = await self._identify_ticker(query)
+        symbol = await self.identify_ticker(query)
         logger.info("CoordinatorAgent: identified ticker → %s", symbol)
 
         # Step 2: Run all worker agents in parallel
@@ -99,8 +104,12 @@ class CoordinatorAgent:
             "errors": errors if errors else None,
         }
 
-    async def _identify_ticker(self, query: str) -> str:
-        """Use the LLM to extract a stock ticker symbol from a natural language query."""
+    async def identify_ticker(self, query: str) -> str:
+        """
+        Use the LLM to extract a stock ticker symbol from a natural language query.
+        Raises ValueError if the resolved symbol is not a plausible ticker — this
+        guards against prompt injection and LLM refusals leaking into API calls.
+        """
         prompt = f"""Extract the stock ticker symbol from this query.
 
 Query: "{query}"
@@ -132,6 +141,13 @@ Return only the ticker symbol:"""
         # Take first word if LLM returned extra text
         if " " in symbol:
             symbol = symbol.split()[0]
+
+        if not TICKER_RE.match(symbol):
+            logger.warning("CoordinatorAgent: rejected invalid ticker %r for query %r", symbol, query)
+            raise ValueError(
+                "Could not resolve a valid stock ticker from your query. "
+                "Try a specific company name or ticker symbol (e.g. 'AAPL' or 'Analyze Reliance')."
+            )
 
         logger.info("CoordinatorAgent: resolved ticker → %s", symbol)
         return symbol

@@ -1,6 +1,10 @@
 """
-News Agent — Retrieves real-time financial news by scraping RSS feeds using BeautifulSoup,
-filters for financial materiality using an LLM, and tags catalyst sentiment.
+News Agent — Retrieves recent financial news, filters for financial
+materiality using an LLM, and tags catalyst sentiment.
+
+Data sources (in priority order):
+1. NewsAPI (https://newsapi.org) — primary, requires NEWS_API_KEY.
+2. Google News RSS — free fallback when the key is missing or NewsAPI fails.
 """
 
 import json
@@ -15,6 +19,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+MAX_ARTICLES = 15
 
 
 class NewsAgent:
@@ -32,62 +38,103 @@ class NewsAgent:
         """
         Fetch recent news articles for the symbol and filter for materiality.
 
-        Returns a dict with key 'articles' containing a list of material articles,
-        each with title, summary, url, source, and catalyst sentiment.
+        Returns a dict with key 'articles' (list of material articles with
+        title, summary, url, source, catalyst) and 'provider' (which source was used).
         """
         logger.info("NewsAgent: fetching news for %s", symbol)
 
         # Strip exchange suffixes for cleaner search queries (e.g., RELIANCE.NS → RELIANCE)
-        search_term = symbol.split(".")[0]
+        search_term = symbol.split(".")[0].lstrip("^")
 
-        try:
-            # Use Google News RSS for real-time news (free, no API key needed)
-            encoded_query = urllib.parse.quote(f"{search_term} stock financial news")
-            url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+        articles: List[Dict] = []
+        provider = "none"
 
-            async with httpx.AsyncClient(timeout=settings.NEWS_API_TIMEOUT) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                
-                # Parse the XML/RSS feed using BeautifulSoup
-                soup = BeautifulSoup(response.text, features="html.parser")
-                items = soup.find_all("item")
-                
-                articles = []
-                # Limit to 15 most recent articles
-                for item in items[:15]:
-                    title = item.find("title").text if item.find("title") else ""
-                    link = item.find("link").text if item.find("link") else ""
-                    pub_date = item.find("pubdate").text if item.find("pubdate") else ""
-                    source = item.find("source").text if item.find("source") else "Unknown"
-                    
-                    articles.append({
-                        "title": title,
-                        "description": "", # RSS descriptions are often messy HTML, we'll let LLM infer from title
-                        "url": link,
-                        "source": source,
-                        "publishedAt": pub_date,
-                    })
-                    
-        except httpx.TimeoutException:
-            logger.warning("NewsAgent: News request timed out for %s", symbol)
-            return {"articles": [], "error": "News request timed out"}
-        except Exception as e:
-            logger.error("NewsAgent: failed to fetch news for %s: %s", symbol, e)
-            return {"articles": [], "error": str(e)}
+        # ── Primary: NewsAPI ──
+        if settings.NEWS_API_KEY:
+            try:
+                articles = await self._fetch_newsapi(search_term)
+                provider = "newsapi"
+            except Exception as e:
+                logger.warning("NewsAgent: NewsAPI failed for %s (%s), falling back to RSS", symbol, e)
+
+        # ── Fallback: Google News RSS ──
+        if not articles:
+            try:
+                articles = await self._fetch_google_rss(search_term)
+                provider = "google_rss"
+            except Exception as e:
+                logger.error("NewsAgent: all news sources failed for %s: %s", symbol, e)
+                return {"articles": [], "provider": "none", "error": str(e)}
 
         if not articles:
             logger.info("NewsAgent: no articles found for %s", symbol)
-            return {"articles": []}
-
-        # Format articles for LLM filtering
-        formatted_articles = articles
+            return {"articles": [], "provider": provider}
 
         # Use LLM to filter for financially material news
-        filtered = await self._filter_material_news(formatted_articles, search_term)
+        filtered = await self._filter_material_news(articles, search_term)
 
-        logger.info("NewsAgent: completed for %s — %d material articles", symbol, len(filtered))
-        return {"articles": filtered}
+        logger.info("NewsAgent: completed for %s — %d material articles via %s", symbol, len(filtered), provider)
+        return {"articles": filtered, "provider": provider}
+
+    async def _fetch_newsapi(self, search_term: str) -> List[Dict]:
+        """Fetch recent articles from NewsAPI. API key sent via header, not URL."""
+        url = "https://newsapi.org/v2/everything"
+        params = {
+            "q": f'"{search_term}" AND (stock OR shares OR earnings OR revenue)',
+            "sortBy": "publishedAt",
+            "language": "en",
+            "pageSize": MAX_ARTICLES,
+        }
+        headers = {"X-Api-Key": settings.NEWS_API_KEY}
+
+        async with httpx.AsyncClient(timeout=settings.NEWS_API_TIMEOUT) as client:
+            response = await client.get(url, params=params, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+
+        if payload.get("status") != "ok":
+            raise RuntimeError(f"NewsAPI error: {payload.get('message', 'unknown')}")
+
+        return [
+            {
+                "title": a.get("title") or "",
+                "description": (a.get("description") or "")[:300],
+                "url": a.get("url") or "",
+                "source": (a.get("source") or {}).get("name", "Unknown"),
+                "publishedAt": a.get("publishedAt") or "",
+            }
+            for a in payload.get("articles", [])[:MAX_ARTICLES]
+            if a.get("title") and a.get("title") != "[Removed]"
+        ]
+
+    async def _fetch_google_rss(self, search_term: str) -> List[Dict]:
+        """Fetch recent articles from Google News RSS (no API key required)."""
+        encoded_query = urllib.parse.quote(f"{search_term} stock financial news")
+        url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+
+        async with httpx.AsyncClient(timeout=settings.NEWS_API_TIMEOUT) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+        # RSS is XML — parse with the xml parser, not the html one
+        soup = BeautifulSoup(response.text, features="xml")
+        items = soup.find_all("item")
+
+        articles = []
+        for item in items[:MAX_ARTICLES]:
+            title = item.find("title").text if item.find("title") else ""
+            link = item.find("link").text if item.find("link") else ""
+            pub_date = item.find("pubDate").text if item.find("pubDate") else ""
+            source = item.find("source").text if item.find("source") else "Unknown"
+            if title:
+                articles.append({
+                    "title": title,
+                    "description": "",  # RSS descriptions are messy HTML; LLM infers from title
+                    "url": link,
+                    "source": source,
+                    "publishedAt": pub_date,
+                })
+        return articles
 
     async def _filter_material_news(self, articles: List[Dict], company: str) -> List[Dict]:
         """Use Gemini to classify articles by financial materiality and catalyst sentiment."""
@@ -123,8 +170,11 @@ If no articles are material, return an empty array: []"""
                 content = content.rsplit("```", 1)[0]  # remove closing fence
                 content = content.strip()
 
-            return json.loads(content)
-        except (json.JSONDecodeError, Exception) as e:
+            parsed = json.loads(content)
+            if not isinstance(parsed, list):
+                raise ValueError("LLM returned non-list JSON")
+            return parsed
+        except Exception as e:
             logger.warning("NewsAgent: LLM filtering failed, returning raw articles: %s", e)
             # Fallback: return articles without LLM filtering
             return [

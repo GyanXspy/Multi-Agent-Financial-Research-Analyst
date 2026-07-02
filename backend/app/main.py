@@ -1,24 +1,34 @@
 """
 FastAPI Main Application — Multi-Agent Financial Research Analyst
 
-Exposes three endpoint types:
-1. POST /api/research/analyze  — Blocking REST endpoint
-2. GET  /api/research/stream   — SSE streaming (agent status + report tokens)
-3. WS   /api/ws/stock/{symbol} — WebSocket live price feed
+Wires together:
+- Auth router      (/api/auth/*)      — register, login, me, admin user management
+- Research router  (/api/research/*)  — analyze (REST), stream (SSE), history
+- WebSocket        (/api/ws/stock/*)  — live price feed (JWT via ?token=)
+Plus: CORS, security headers, rate limiting, and DB initialization.
 """
 
 import asyncio
-import json
+import contextlib
 import logging
+import re
 
 import uvicorn
 import yfinance as yf
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from sse_starlette.sse import EventSourceResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
-from app.agents.coordinator import CoordinatorAgent
-from app.schemas import ResearchRequest, ResearchResponse
+from app.config import settings
+from app.db import async_session_factory, init_db
+from app.rate_limit import limiter
+from app.routers import auth as auth_router
+from app.routers import research as research_router
+from app.security import authenticate_websocket
 
 # --- Logging setup ---
 logging.basicConfig(
@@ -28,164 +38,120 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- FastAPI app ---
+SYMBOL_RE = re.compile(r"^\^?[A-Z0-9.\-]{1,12}$")
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    logger.info("Database initialized")
+    yield
+
+
 app = FastAPI(
     title="Real-Time Multi-Agent Financial Research Analyst API",
     description="Coordinates specialized AI agents to produce investment research reports with live data streaming.",
-    version="1.0.0",
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
-# --- CORS middleware ---
+# --- Rate limiting ---
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded. Please slow down."})
+
+
+app.add_middleware(SlowAPIMiddleware)
+
+
+# --- Security headers ---
+# Docs/OpenAPI paths are excluded from strict CSP so Swagger UI can load its
+# external CDN assets. All API responses still get the hardened policy.
+DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if not request.url.path.startswith(DOCS_PATHS):
+            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# --- CORS (restricted origins; wildcard + credentials is invalid & insecure) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific domains
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# --- Shared coordinator instance ---
-coordinator = CoordinatorAgent()
+# --- Routers ---
+app.include_router(auth_router.router)
+app.include_router(research_router.router)
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Blocking REST Endpoint
+# WebSocket Live Price Feed
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.post("/api/research/analyze", response_model=ResearchResponse)
-async def analyze_stock(request: ResearchRequest):
-    """
-    Run the full multi-agent pipeline and return the complete research report.
-    This is a blocking request — waits for all agents to complete.
-    """
-    logger.info("REST /analyze — query: %s", request.query)
-    try:
-        result = await coordinator.run(request.query)
-        return ResearchResponse(
-            symbol=result["symbol"],
-            data=result["data"],
-            report=result["report"],
-            errors=result.get("errors"),
-        )
-    except Exception as e:
-        logger.exception("REST /analyze failed")
-        raise HTTPException(status_code=500, detail=str(e))
+def _fetch_latest_bar(symbol: str) -> dict | None:
+    """Blocking yfinance fetch — always call via asyncio.to_thread."""
+    history = yf.Ticker(symbol).history(period="1d", interval="1m")
+    if history.empty:
+        return None
+    latest = history.tail(1)
+    return {
+        "symbol": symbol,
+        "price": round(float(latest["Close"].iloc[0]), 2),
+        "open": round(float(latest["Open"].iloc[0]), 2),
+        "high": round(float(latest["High"].iloc[0]), 2),
+        "low": round(float(latest["Low"].iloc[0]), 2),
+        "volume": int(latest["Volume"].iloc[0]),
+        "timestamp": str(latest.index[0]),
+    }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. SSE Streaming Endpoint (Agent Status + Report Token Stream)
-# ─────────────────────────────────────────────────────────────────────────────
-
-@app.get("/api/research/stream")
-async def stream_analysis(query: str):
-    """
-    Server-Sent Events (SSE) endpoint that streams:
-    - 'status'       — pipeline stage updates
-    - 'data'         — aggregated financial data (JSON)
-    - 'report_chunk' — streaming report text tokens
-    - 'done'         — completion signal
-    - 'error'        — error messages
-    """
-    logger.info("SSE /stream — query: %s", query)
-
-    async def event_generator():
-        try:
-            # ── Step 1: Resolve ticker ──
-            yield {"event": "status", "data": "Coordinator identifying stock ticker..."}
-            symbol = await coordinator._identify_ticker(query)
-            yield {"event": "status", "data": f"Ticker identified: {symbol}. Launching agent pipeline..."}
-
-            # ── Step 2: Launch worker agents in parallel ──
-            yield {"event": "status", "data": "Starting Financial Data, News, Filings, and Peer Comparison agents..."}
-
-            financials_task = asyncio.create_task(coordinator.financial_agent.collect(symbol))
-            news_task = asyncio.create_task(coordinator.news_agent.collect(symbol))
-            filings_task = asyncio.create_task(coordinator.filings_agent.collect(symbol))
-            peers_task = asyncio.create_task(coordinator.peer_agent.collect(symbol))
-
-            all_tasks = [financials_task, news_task, filings_task, peers_task]
-            agent_names = ["Financial Data", "News", "Filings", "Peer Comparison"]
-
-            # Poll until all tasks complete, sending heartbeat status updates
-            while not all(t.done() for t in all_tasks):
-                await asyncio.sleep(1.0)
-                completed = [name for name, t in zip(agent_names, all_tasks) if t.done()]
-                pending = [name for name, t in zip(agent_names, all_tasks) if not t.done()]
-                status_msg = f"Completed: [{', '.join(completed) or 'none'}] | Running: [{', '.join(pending)}]"
-                yield {"event": "status", "data": status_msg}
-
-            # ── Step 3: Aggregate results ──
-            yield {"event": "status", "data": "All worker agents completed. Aggregating data..."}
-
-            errors = {}
-
-            def safe_result(task, name):
-                try:
-                    return task.result()
-                except Exception as e:
-                    errors[name] = str(e)
-                    return {}
-
-            aggregated_data = {
-                "symbol": symbol,
-                "financials": safe_result(financials_task, "financial_data"),
-                "news": safe_result(news_task, "news"),
-                "filings": safe_result(filings_task, "filings"),
-                "peers": safe_result(peers_task, "peer_comparison"),
-            }
-
-            # Send the aggregated data to the frontend (populates metrics cards)
-            yield {"event": "data", "data": json.dumps(aggregated_data, default=str)}
-
-            if errors:
-                yield {"event": "status", "data": f"Warning: {len(errors)} agent(s) had errors: {list(errors.keys())}"}
-
-            # ── Step 4: Stream the report ──
-            yield {"event": "status", "data": "Thesis Writer Agent generating investment report..."}
-
-            async for chunk in coordinator.thesis_agent.stream_report(aggregated_data):
-                yield {"event": "report_chunk", "data": chunk}
-
-            yield {"event": "status", "data": "Analysis complete."}
-            yield {"event": "done", "data": "true"}
-
-        except Exception as e:
-            logger.exception("SSE /stream failed")
-            yield {"event": "error", "data": str(e)}
-
-    return EventSourceResponse(event_generator())
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. WebSocket Live Price Feed
-# ─────────────────────────────────────────────────────────────────────────────
 
 @app.websocket("/api/ws/stock/{symbol}")
 async def websocket_stock_price(websocket: WebSocket, symbol: str):
     """
-    WebSocket endpoint that streams live stock price data every second.
-    Uses yfinance 1-minute interval bars for the current trading day.
+    Streams live price data for a symbol. Requires ?token=<JWT>.
+    Fetches fresh 1-minute bars every 5 seconds without blocking the event loop.
     """
     await websocket.accept()
-    logger.info("WebSocket connected for %s", symbol)
+
+    async with async_session_factory() as db:
+        user = await authenticate_websocket(websocket, db)
+    if user is None:
+        return
+
+    symbol = symbol.upper().strip()
+    if not SYMBOL_RE.match(symbol):
+        await websocket.close(code=4400, reason="Invalid symbol format")
+        return
+
+    logger.info("WebSocket connected for %s (user=%s)", symbol, user.email)
 
     try:
-        ticker = yf.Ticker(symbol)
-
         while True:
             try:
-                history = ticker.history(period="1d", interval="1m")
-                if not history.empty:
-                    latest_bar = history.tail(1)
-                    price_data = {
-                        "symbol": symbol,
-                        "price": round(float(latest_bar["Close"].iloc[0]), 2),
-                        "open": round(float(latest_bar["Open"].iloc[0]), 2),
-                        "high": round(float(latest_bar["High"].iloc[0]), 2),
-                        "low": round(float(latest_bar["Low"].iloc[0]), 2),
-                        "volume": int(latest_bar["Volume"].iloc[0]),
-                        "timestamp": str(latest_bar.index[0]),
-                    }
+                price_data = await asyncio.to_thread(_fetch_latest_bar, symbol)
+                if price_data:
                     await websocket.send_json(price_data)
                 else:
                     await websocket.send_json({
@@ -193,15 +159,15 @@ async def websocket_stock_price(websocket: WebSocket, symbol: str):
                         "error": "Market may be closed — no intraday data available.",
                     })
             except WebSocketDisconnect:
+                raise
+            except RuntimeError:
+                # Socket already closing/closed — stop the loop quietly
                 break
-            except RuntimeError as e:
-                if "Cannot call" in str(e) or "close message has been sent" in str(e):
-                    break
-                await websocket.send_json({"symbol": symbol, "error": str(e)})
             except Exception as e:
-                await websocket.send_json({"symbol": symbol, "error": str(e)})
+                logger.warning("WebSocket fetch error for %s: %s", symbol, e)
+                await websocket.send_json({"symbol": symbol, "error": "Price fetch failed"})
 
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(5.0)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for %s", symbol)
@@ -214,8 +180,6 @@ async def websocket_stock_price(websocket: WebSocket, symbol: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from app.config import settings
-
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,

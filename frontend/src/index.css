@@ -1,22 +1,34 @@
 @import "tailwindcss";
 
-/* ─── Custom Theme ─── */
+/* ─── Design System Theme ───
+   Fonts:  Space Grotesk (display) + Inter (body), loaded in index.html
+   Palette: "ink" — deep blue-black neutrals + emerald/teal accents           */
 @theme {
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+
+  /* Neutral scale (ink) */
+  --color-ink-100: #e7ecf4;
+  --color-ink-200: #cbd5e4;
+  --color-ink-300: #a4b2c8;
+  --color-ink-400: #7c8aa5;
+  --color-ink-500: #5a6781;
+  --color-ink-600: #414d64;
+  --color-ink-700: #2e394e;
+  --color-ink-800: #1e2637;
+  --color-ink-900: #131a28;
+  --color-ink-950: #0a0f1a;
+
+  /* Accents */
+  --color-emerald-300: #6ee7b7;
   --color-emerald-400: #34d399;
   --color-emerald-500: #10b981;
-  --color-emerald-600: #059669;
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-200: #e2e8f0;
-  --color-slate-400: #94a3b8;
-  --color-slate-500: #64748b;
-  --color-slate-600: #475569;
-  --color-slate-700: #334155;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
-  --color-slate-950: #020617;
-  --color-red-400: #f87171;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
   --color-amber-400: #fbbf24;
 }
 
@@ -34,9 +46,30 @@ html {
 
 body {
   margin: 0;
-  background-color: var(--color-slate-950);
-  color: var(--color-slate-100);
+  background-color: var(--color-ink-950);
+  color: var(--color-ink-100);
   font-family: var(--font-sans);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Screen-reader-only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ─── Scrollbar Styling ─── */
@@ -46,36 +79,47 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-slate-900);
+  background: var(--color-ink-900);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-slate-700);
+  background: var(--color-ink-700);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-slate-600);
+  background: var(--color-ink-600);
 }
 
-/* ─── Markdown Prose Overrides (dark theme) ─── */
+/* ─── Markdown Prose (report body, dark theme) ─── */
 .prose-report {
-  color: var(--color-slate-200);
+  color: var(--color-ink-200);
   line-height: 1.75;
+  font-size: 0.95rem;
 }
 
 .prose-report h1,
 .prose-report h2,
 .prose-report h3 {
-  color: var(--color-slate-50);
+  font-family: var(--font-display);
+  color: #ffffff;
   font-weight: 700;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
+  letter-spacing: -0.01em;
 }
 
-.prose-report h1 { font-size: 1.75rem; }
-.prose-report h2 { font-size: 1.35rem; border-bottom: 1px solid var(--color-slate-800); padding-bottom: 0.3em; }
-.prose-report h3 { font-size: 1.1rem; }
+.prose-report > :first-child {
+  margin-top: 0;
+}
+
+.prose-report h1 { font-size: 1.6rem; }
+.prose-report h2 {
+  font-size: 1.25rem;
+  border-bottom: 1px solid var(--color-ink-800);
+  padding-bottom: 0.35em;
+}
+.prose-report h3 { font-size: 1.05rem; }
 
 .prose-report p {
   margin: 0.75em 0;
@@ -88,40 +132,45 @@ body {
 }
 
 .prose-report li {
-  margin: 0.25em 0;
+  margin: 0.3em 0;
 }
 
 .prose-report table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1em 0;
-  font-size: 0.875rem;
+  margin: 1.2em 0;
+  font-size: 0.85rem;
+  display: block;
+  overflow-x: auto;
 }
 
 .prose-report th {
-  background-color: var(--color-slate-800);
-  color: var(--color-emerald-400);
-  padding: 0.5em 0.75em;
+  background-color: var(--color-ink-800);
+  color: var(--color-emerald-300);
+  padding: 0.6em 0.85em;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid var(--color-slate-700);
+  border-bottom: 2px solid var(--color-ink-700);
+  white-space: nowrap;
 }
 
 .prose-report td {
-  padding: 0.5em 0.75em;
-  border-bottom: 1px solid var(--color-slate-800);
+  padding: 0.55em 0.85em;
+  border-bottom: 1px solid var(--color-ink-800);
+  font-variant-numeric: tabular-nums;
 }
 
 .prose-report tr:hover td {
-  background-color: var(--color-slate-900);
+  background-color: var(--color-ink-900);
 }
 
 .prose-report strong {
-  color: var(--color-slate-50);
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .prose-report code {
-  background-color: var(--color-slate-800);
+  background-color: var(--color-ink-800);
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-size: 0.85em;
@@ -131,8 +180,20 @@ body {
   border-left: 3px solid var(--color-emerald-500);
   padding-left: 1em;
   margin-left: 0;
-  color: var(--color-slate-400);
+  color: var(--color-ink-300);
   font-style: italic;
+}
+
+.prose-report hr {
+  border: none;
+  border-top: 1px solid var(--color-ink-800);
+  margin: 1.5em 0;
+}
+
+.prose-report a {
+  color: var(--color-emerald-400);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ─── Animations ─── */
@@ -156,11 +217,26 @@ body {
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, var(--color-slate-800) 25%, var(--color-slate-700) 50%, var(--color-slate-800) 75%);
+  background: linear-gradient(90deg, var(--color-ink-800) 25%, var(--color-ink-700) 50%, var(--color-ink-800) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+/* ─── Reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-dot,
+  .animate-shimmer,
+  .animate-fade-in,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -78,7 +78,7 @@ Monitors recent developments affecting the selected company.
   * Remove duplicate or irrelevant articles.
   * Summarize key developments (earnings, management changes, M&A, regulatory actions).
   * Identify potential positive and negative market catalysts.
-* **Data Source:** NewsAPI.
+* **Data Sources:** NewsAPI (primary), Google News RSS (automatic fallback when no API key is configured).
 
 ### 4. Filings Agent
 Analyzes official corporate disclosures (annual reports, quarterly filings) to identify significant financial and operational changes.
@@ -125,13 +125,14 @@ Synthesizes outputs from all previous agents into a structured investment resear
 | **Multi-Agent Framework** | LangChain | For building LLM chains and agent workflows |
 | **Agent Runtime** | Google ADK | For orchestrating agent sessions and tools |
 | **Large Language Model** | Gemini Family Models | For reasoning, parsing, and report generation |
-| **Financial Data** | yfinance, NSE Open Data, BSE APIs | Quantitative market data ingestion |
-| **News Retrieval** | NewsAPI | Financial news streaming |
-| **Filing Parsing** | BeautifulSoup, PDF Parsing | Parsing SEC filings / corporate PDF reports |
+| **Financial Data** | yfinance | Quantitative market data ingestion (US, NSE `.NS`, BSE `.BO`, indices) |
+| **News Retrieval** | NewsAPI + Google News RSS fallback | Financial news retrieval |
+| **Filing Parsing** | BeautifulSoup, SEC EDGAR API | Parsing SEC 10-K/10-Q filings (cached CIK lookup) |
 | **Backend API** | FastAPI, SSE (`sse-starlette`), WebSockets | Real-time agent status streaming and price ticks |
-| **Frontend** | React.js, HTML5 `EventSource`, WebSockets | Dynamic dashboard with streaming updates and live price feed |
-| **Database** | PostgreSQL / MongoDB (Optional) | Persisting generated reports & cache |
-| **Session Management** | LangChain Memory / ADK Sessions | Managing state across multi-turn agent sessions |
+| **Auth & RBAC** | JWT (PyJWT) + bcrypt | Login, roles (`admin`/`analyst`), protected endpoints |
+| **Rate Limiting** | slowapi | Per-IP limits on auth and research endpoints |
+| **Frontend** | React 19, fetch-stream SSE, WebSockets | Authenticated dashboard with streaming updates and live price feed |
+| **Database** | SQLite (SQLAlchemy async) | Users, roles, and persisted research reports |
 
 ---
 
@@ -141,29 +142,65 @@ Synthesizes outputs from all previous agents into a structured investment resear
 ├── backend/
 │   ├── app/
 │   │   ├── agents/          # Agent implementations (coordinator, financial, news, filings, peer, writer)
-│   │   ├── tools/           # Custom API tools (yfinance, newsapi, sec/filings scraper)
-│   │   ├── services/        # Backend business logic and API route controllers
-│   │   ├── main.py          # FastAPI main application file
-│   │   └── config.py        # Configuration settings (API keys, LLM selections)
-│   ├── requirements.txt     # Python dependencies
-│   └── README.md            # Backend instructions
+│   │   ├── routers/         # API routers (auth, research)
+│   │   ├── main.py          # FastAPI app: middleware, WebSocket feed, entrypoint
+│   │   ├── config.py        # Configuration settings (API keys, LLM selections)
+│   │   ├── db.py            # Async SQLAlchemy engine + User/Report models
+│   │   ├── security.py      # bcrypt hashing, JWT, auth dependencies
+│   │   ├── rate_limit.py    # Shared slowapi limiter
+│   │   └── schemas.py       # Pydantic request/response schemas
+│   ├── tests/               # pytest suite (auth, RBAC, security)
+│   └── requirements.txt     # Python dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── components/      # Reusable UI components (ReportViewer, StockChart)
-│   │   ├── pages/           # React pages (Dashboard, Stocks)
-│   │   ├── App.tsx          # Main React Application shell
-│   │   └── index.css        # Tailwind or Custom CSS Styling
-│   ├── package.json         # Node.js dependencies
-│   └── README.md            # Frontend instructions
-├── README.md                # Project landing page (this file)
-└── implementation.md        # Technical design & implementation document
+│   │   ├── components/      # PriceChart, PipelineStatus, ReportView, MetricCard, ErrorBoundary
+│   │   ├── context/         # AuthContext (session state)
+│   │   ├── lib/             # api client, fetch-based SSE reader, pipeline state
+│   │   ├── pages/           # LoginPage, StockAnalystDashboard
+│   │   ├── App.tsx          # Auth gate + error boundary
+│   │   └── index.css        # Tailwind v4 design system
+│   └── package.json         # Node.js dependencies
+└── README.md                # Project landing page (this file)
 ```
 
 ---
 
 ## Installation & Setup
 
-Please refer to [implementation.md](file:///d:/Python/Project/Stock%20Analyst/implementation.md) for detailed configuration, API integration setup, and step-by-step installation instructions.
+### Backend
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows (source venv/bin/activate on Unix)
+pip install -r requirements.txt
+copy .env.example .env         # then fill in the values below
+python -m uvicorn app.main:app --reload
+```
+
+Required `.env` values:
+| Variable | Purpose |
+| :--- | :--- |
+| `GEMINI_API_KEY` | Google Gemini API key (required) |
+| `JWT_SECRET` | Token signing secret — generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `NEWS_API_KEY` | NewsAPI key (optional — falls back to Google News RSS) |
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev                    # http://localhost:5173
+```
+
+### First run
+The **first account registered becomes the administrator**; all subsequent
+accounts are analysts. Admins can manage roles from the dashboard's
+User Management panel and can see every user's report history.
+
+### Tests
+```bash
+cd backend
+python -m pytest
+```
 
 ---
 

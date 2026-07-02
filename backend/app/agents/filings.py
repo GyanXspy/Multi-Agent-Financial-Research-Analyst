@@ -6,8 +6,10 @@ NOTE: For MVP, this agent uses SEC EDGAR's full-text search API. If filings
 are not found (e.g., for non-US stocks), it returns a graceful fallback.
 """
 
+import json
 import logging
-from typing import Any, Dict
+import time
+from typing import Any, Dict, Optional
 
 import httpx
 from bs4 import BeautifulSoup
@@ -22,6 +24,32 @@ SEC_HEADERS = {
     "User-Agent": "MultiAgentFinancialAnalyst research@example.com",
     "Accept-Encoding": "gzip, deflate",
 }
+
+# Module-level cache for the SEC ticker→CIK map (~15 MB download otherwise
+# repeated on every request). Refreshed once per 24 hours.
+_CIK_CACHE: Dict[str, Any] = {"map": None, "fetched_at": 0.0}
+_CIK_TTL_SECONDS = 24 * 3600
+
+
+async def _get_cik_map(client: httpx.AsyncClient) -> Dict[str, str]:
+    """Return {TICKER: zero-padded CIK} using a 24h in-memory cache."""
+    now = time.time()
+    if _CIK_CACHE["map"] is not None and now - _CIK_CACHE["fetched_at"] < _CIK_TTL_SECONDS:
+        return _CIK_CACHE["map"]
+
+    resp = await client.get("https://www.sec.gov/files/company_tickers.json")
+    resp.raise_for_status()
+    data = resp.json()
+
+    cik_map = {
+        entry.get("ticker", "").upper(): str(entry["cik_str"]).zfill(10)
+        for entry in data.values()
+        if entry.get("ticker")
+    }
+    _CIK_CACHE["map"] = cik_map
+    _CIK_CACHE["fetched_at"] = now
+    logger.info("FilingsAgent: refreshed SEC CIK map (%d tickers)", len(cik_map))
+    return cik_map
 
 
 class FilingsAgent:
@@ -74,24 +102,13 @@ class FilingsAgent:
     async def _fetch_latest_filing(self, symbol: str) -> str:
         """
         Fetch the latest 10-K or 10-Q filing text from SEC EDGAR.
-        Uses the EDGAR full-text search API to find the most recent filing.
+        Resolves the CIK from the (cached) SEC ticker map, then downloads
+        the most recent 10-K/10-Q primary document.
         """
-        # Step 1: Look up the company's CIK from EDGAR
-        search_url = f"https://efts.sec.gov/LATEST/search-index?q=%22{symbol}%22&dateRange=custom&startdt=2024-01-01&forms=10-K,10-Q"
-
         async with httpx.AsyncClient(timeout=settings.EDGAR_TIMEOUT, headers=SEC_HEADERS) as client:
-            # Use the company tickers JSON to resolve CIK
-            tickers_url = "https://www.sec.gov/files/company_tickers.json"
-            tickers_resp = await client.get(tickers_url)
-            tickers_resp.raise_for_status()
-            tickers_data = tickers_resp.json()
-
-            # Find CIK for the symbol
-            cik = None
-            for _, entry in tickers_data.items():
-                if entry.get("ticker", "").upper() == symbol.upper():
-                    cik = str(entry["cik_str"]).zfill(10)
-                    break
+            # Step 1: Resolve CIK from cached ticker map
+            cik_map = await _get_cik_map(client)
+            cik: Optional[str] = cik_map.get(symbol.upper())
 
             if not cik:
                 raise ValueError(f"CIK not found for symbol {symbol}")
@@ -160,7 +177,6 @@ Return your analysis as a structured JSON object (no markdown fences):
                 content = content.rsplit("```", 1)[0]
                 content = content.strip()
 
-            import json
             return json.loads(content)
         except Exception as e:
             logger.warning("FilingsAgent: LLM summary parsing failed: %s", e)

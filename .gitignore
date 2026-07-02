@@ -1,7 +1,17 @@
-.env 
-venv 
-# implementation
+# Secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.db
+
+# Utility scripts (local only)
 backend/list_models.py
 backend/list_models_rest.py
 
+# Docs kept out of VCS
 implementation.md
+
+.claude
