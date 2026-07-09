@@ -99,3 +99,57 @@ class RoleUpdateRequest(BaseModel):
 
 class UserListResponse(BaseModel):
     users: List[UserOut]
+
+
+# ─── Admin ──────────────────────────────────────────────────────────────────
+
+class AdminUserCreate(BaseModel):
+    """Admin-initiated account creation."""
+
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    role: str = Field(default="analyst", pattern="^(admin|analyst)$")
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class AuditLogEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actor_email: str
+    action: str
+    target: str
+    detail: str
+    ip: str
+    created_at: datetime
+
+
+class AuditLogResponse(BaseModel):
+    entries: List[AuditLogEntry]
+    total: int
+
+
+class AdminStats(BaseModel):
+    total_users: int
+    admin_count: int
+    analyst_count: int
+    total_reports: int
+    reports_last_7d: int
+    recent_events: List[AuditLogEntry]
+
+
+class SystemSettingsOut(BaseModel):
+    registration_open: bool
+    default_role: str
+    session_timeout_minutes: int
+
+
+class SystemSettingsUpdate(BaseModel):
+    """All fields optional — only provided keys are updated."""
+
+    registration_open: Optional[bool] = None
+    default_role: Optional[str] = Field(default=None, pattern="^(admin|analyst)$")
+    session_timeout_minutes: Optional[int] = Field(default=None, ge=0, le=10080)

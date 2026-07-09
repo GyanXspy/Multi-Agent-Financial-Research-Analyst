@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # The single email address permitted to hold the 'admin' role. Registering
+    # with this address grants admin; every other address becomes an analyst.
+    # No one else can be promoted to admin (see routers/auth.py, routers/admin.py).
+    ADMIN_EMAIL: str = "gyanaranjanpatra780@gmail.com"
+
     # --- Database ---
     DATABASE_URL: str = "mysql+aiomysql://root:sql24@localhost/stockanalyst"
 

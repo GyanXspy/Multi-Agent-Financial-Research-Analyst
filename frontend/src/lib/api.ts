@@ -46,6 +46,40 @@ export interface ReportDetail extends ReportSummary {
   data_json: string;
 }
 
+/* ─── Admin types ─── */
+
+export interface AuditLogEntry {
+  id: number;
+  actor_email: string;
+  action: string;
+  target: string;
+  detail: string;
+  ip: string;
+  created_at: string;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+  total: number;
+}
+
+export interface AdminStats {
+  total_users: number;
+  admin_count: number;
+  analyst_count: number;
+  total_reports: number;
+  reports_last_7d: number;
+  recent_events: AuditLogEntry[];
+}
+
+export interface SystemSettings {
+  registration_open: boolean;
+  default_role: 'admin' | 'analyst';
+  session_timeout_minutes: number;
+}
+
+export type SystemSettingsUpdate = Partial<SystemSettings>;
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -76,6 +110,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) await parseError(res);
+  // 204 No Content (e.g. DELETE) has an empty body — don't try to parse it.
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -107,4 +145,40 @@ export const api = {
   history: () => apiFetch<ReportSummary[]>('/api/research/history'),
 
   reportDetail: (id: number) => apiFetch<ReportDetail>(`/api/research/history/${id}`),
+
+  /* ─── Admin console ─── */
+
+  adminStats: () => apiFetch<AdminStats>('/api/admin/stats'),
+
+  createUser: (email: string, password: string, role: 'admin' | 'analyst' = 'analyst') =>
+    apiFetch<UserOut>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, role }),
+    }),
+
+  deleteUser: (userId: number) =>
+    apiFetch<void>(`/api/admin/users/${userId}`, { method: 'DELETE' }),
+
+  resetPassword: (userId: number, newPassword: string) =>
+    apiFetch<UserOut>(`/api/admin/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
+
+  auditLog: (params: { limit?: number; offset?: number; action?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit != null) qs.set('limit', String(params.limit));
+    if (params.offset != null) qs.set('offset', String(params.offset));
+    if (params.action) qs.set('action', params.action);
+    const query = qs.toString();
+    return apiFetch<AuditLogResponse>(`/api/admin/audit${query ? `?${query}` : ''}`);
+  },
+
+  getSettings: () => apiFetch<SystemSettings>('/api/admin/settings'),
+
+  updateSettings: (updates: SystemSettingsUpdate) =>
+    apiFetch<SystemSettings>('/api/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
 };

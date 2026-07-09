@@ -14,6 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-pytest-only-padded-to-a-safe-length-000000")
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_stockanalyst.db"
+# The admin role is granted solely to this configured address (see db.is_admin_email).
+# Tests register admin@test.com and expect it to become admin, so pin it here
+# before app.config is imported.
+os.environ["ADMIN_EMAIL"] = "admin@test.com"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -47,3 +51,20 @@ def client():
     with TestClient(app) as c:
         yield c
     limiter.enabled = True
+
+
+@pytest.fixture(scope="session")
+def admin(_prepare_db):
+    """
+    Registers the configured ADMIN_EMAIL once for the whole session and returns
+    its token + user. Session-scoped and defined here (not in a test module) so
+    every test file shares the single admin instead of re-registering it.
+    """
+    limiter.enabled = False
+    with TestClient(app) as c:
+        resp = c.post("/api/auth/register", json={"email": "admin@test.com", "password": "adminpass123"})
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["user"]["role"] == "admin"
+    limiter.enabled = True
+    return {"token": body["access_token"], "user": body["user"]}

@@ -45,15 +45,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ─── JWT ────────────────────────────────────────────────────────────────────
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user_id: int, role: str, expires_minutes: Optional[int] = None) -> str:
     if not settings.JWT_SECRET:
         raise RuntimeError("JWT_SECRET is not configured — set it in backend/.env")
+    # A positive override (from the session_timeout_minutes system setting) wins;
+    # otherwise fall back to the static config default.
+    minutes = expires_minutes if expires_minutes and expires_minutes > 0 else settings.ACCESS_TOKEN_EXPIRE_MINUTES
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "role": role,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "exp": now + timedelta(minutes=minutes),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

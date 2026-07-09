@@ -2,7 +2,8 @@
 FastAPI Main Application — Multi-Agent Financial Research Analyst
 
 Wires together:
-- Auth router      (/api/auth/*)      — register, login, me, admin user management
+- Auth router      (/api/auth/*)      — register, login, me, list users, role changes
+- Admin router     (/api/admin/*)     — user management, audit log, stats, settings
 - Research router  (/api/research/*)  — analyze (REST), stream (SSE), history
 - WebSocket        (/api/ws/stock/*)  — live price feed (JWT via ?token=)
 Plus: CORS, security headers, rate limiting, and DB initialization.
@@ -23,12 +24,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from sqlalchemy import select
+
 from app.config import settings
-from app.db import async_session_factory, init_db
+from app.db import ROLE_ADMIN, ROLE_ANALYST, User, async_session_factory, init_db, is_admin_email
 from app.rate_limit import limiter
+from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import research as research_router
 from app.security import authenticate_websocket
+from app.settings_store import seed_defaults
 
 # --- Logging setup ---
 logging.basicConfig(
@@ -41,9 +46,36 @@ logger = logging.getLogger(__name__)
 SYMBOL_RE = re.compile(r"^\^?[A-Z0-9.\-]{1,12}$")
 
 
+async def reconcile_admin() -> None:
+    """
+    Enforce the single-admin invariant on every startup:
+    - the configured ADMIN_EMAIL, if it exists, is set to 'admin';
+    - any other account left as 'admin' (e.g. from the old first-user rule) is
+      demoted to 'analyst'.
+    Also seed default system settings.
+    """
+    async with async_session_factory() as db:
+        users = (await db.execute(select(User))).scalars().all()
+        changed = False
+        for user in users:
+            if is_admin_email(user.email):
+                if user.role != ROLE_ADMIN:
+                    user.role = ROLE_ADMIN
+                    changed = True
+                    logger.info("Startup: promoted configured admin %s", user.email)
+            elif user.role == ROLE_ADMIN:
+                user.role = ROLE_ANALYST
+                changed = True
+                logger.warning("Startup: demoted stray admin %s -> analyst", user.email)
+        if changed:
+            await db.commit()
+        await seed_defaults(db)
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await reconcile_admin()
     logger.info("Database initialized")
     yield
 
@@ -92,12 +124,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
 # --- Routers ---
 app.include_router(auth_router.router)
+app.include_router(admin_router.router)
 app.include_router(research_router.router)
 
 

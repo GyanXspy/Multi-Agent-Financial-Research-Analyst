@@ -6,7 +6,7 @@ created on application startup (see main.py lifespan).
 """
 
 from datetime import datetime, timezone
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.ext.asyncio import (
@@ -24,6 +24,11 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 ROLE_ADMIN = "admin"
 ROLE_ANALYST = "analyst"
 VALID_ROLES = (ROLE_ADMIN, ROLE_ANALYST)
+
+
+def is_admin_email(email: str) -> bool:
+    """True if `email` is the single address permitted to be admin (case-insensitive)."""
+    return email.strip().lower() == settings.ADMIN_EMAIL.strip().lower()
 
 
 class Base(DeclarativeBase):
@@ -53,6 +58,36 @@ class Report(Base):
     data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AuditLog(Base):
+    """Append-only record of security- and admin-relevant events for oversight."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Actor may be null for anonymous events (e.g. a failed login on unknown email).
+    actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    actor_email: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    action: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    target: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    detail: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    ip: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True, nullable=False
+    )
+
+
+class SystemSetting(Base):
+    """Key/value store for admin-configurable, runtime-enforced settings."""
+
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(512), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 

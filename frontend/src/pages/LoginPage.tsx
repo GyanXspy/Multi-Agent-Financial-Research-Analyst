@@ -132,7 +132,7 @@ export default function LoginPage() {
 
           {mode === 'register' && (
             <p className="text-ink-500 text-xs text-center mt-4">
-              The first account created becomes the administrator.
+              New accounts are analysts. Administrator access is reserved for a single designated address.
             </p>
           )}
         </div>

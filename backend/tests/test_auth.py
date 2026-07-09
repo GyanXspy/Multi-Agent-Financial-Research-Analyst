@@ -2,28 +2,11 @@
 
 import uuid
 
-import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-from app.rate_limit import limiter
+# The `admin` fixture is shared session-wide from conftest.py.
 
 
 def _email() -> str:
     return f"user-{uuid.uuid4().hex[:10]}@test.com"
-
-
-@pytest.fixture(scope="session")
-def admin(_prepare_db):
-    """Claims the first-user-is-admin slot for the whole test session."""
-    limiter.enabled = False
-    with TestClient(app) as c:
-        resp = c.post("/api/auth/register", json={"email": "admin@test.com", "password": "adminpass123"})
-        assert resp.status_code == 201
-        body = resp.json()
-        assert body["user"]["role"] == "admin"
-    limiter.enabled = True
-    return {"token": body["access_token"], "user": body["user"]}
 
 
 def test_subsequent_users_are_analysts(client, admin):
@@ -95,7 +78,7 @@ def test_analyst_cannot_access_admin_endpoints(client, admin):
     assert denied.status_code == 403
 
 
-def test_admin_lists_users_and_changes_roles(client, admin):
+def test_admin_lists_users_and_role_rules(client, admin):
     target = client.post("/api/auth/register", json={"email": _email(), "password": "password123"}).json()
     headers = {"Authorization": f"Bearer {admin['token']}"}
 
@@ -103,10 +86,16 @@ def test_admin_lists_users_and_changes_roles(client, admin):
     assert users.status_code == 200
     assert len(users.json()["users"]) >= 2
 
-    changed = client.patch(f"/api/auth/users/{target['user']['id']}/role", json={"role": "admin"}, headers=headers)
-    assert changed.status_code == 200
-    assert changed.json()["role"] == "admin"
+    # Setting a non-admin address to 'analyst' is an accepted no-op.
+    same = client.patch(f"/api/auth/users/{target['user']['id']}/role", json={"role": "analyst"}, headers=headers)
+    assert same.status_code == 200
+    assert same.json()["role"] == "analyst"
 
+    # The admin role is reserved for the configured address — promotion is forbidden.
+    promote = client.patch(f"/api/auth/users/{target['user']['id']}/role", json={"role": "admin"}, headers=headers)
+    assert promote.status_code == 403
+
+    # Unknown roles are rejected by validation.
     invalid = client.patch(f"/api/auth/users/{target['user']['id']}/role", json={"role": "superuser"}, headers=headers)
     assert invalid.status_code == 422
 
