@@ -31,7 +31,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .me()
       .then(setUser)
-      .catch(() => clearToken())
+      .catch((err) => {
+        // Only clear the token on genuine auth failures (401/403).
+        // Network errors or 5xx should not silently log the user out —
+        // the token may still be valid once the server recovers.
+        const isAuthError =
+          err && typeof err === 'object' && 'status' in err &&
+          (err.status === 401 || err.status === 403);
+        if (isAuthError) {
+          clearToken();
+        } else {
+          console.warn('Session restore failed (non-auth error):', err);
+        }
+      })
       .finally(() => setInitializing(false));
   }, []);
 

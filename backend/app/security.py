@@ -23,6 +23,10 @@ from app.db import ROLE_ADMIN, User, get_db
 
 logger = logging.getLogger(__name__)
 
+# JWT identity claims — prevent token reuse across services sharing a secret.
+JWT_ISSUER = "stock-analyst-api"
+JWT_AUDIENCE = "stock-analyst-api"
+
 CREDENTIALS_EXC = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Invalid or expired credentials",
@@ -57,6 +61,8 @@ def create_access_token(user_id: int, role: str, expires_minutes: Optional[int] 
         "role": role,
         "iat": now,
         "exp": now + timedelta(minutes=minutes),
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
@@ -66,7 +72,13 @@ def decode_token(token: str) -> dict:
     if not settings.JWT_SECRET:
         raise CREDENTIALS_EXC
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer=JWT_ISSUER,
+            audience=JWT_AUDIENCE,
+        )
     except jwt.PyJWTError:
         raise CREDENTIALS_EXC
 

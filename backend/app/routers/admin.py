@@ -27,6 +27,7 @@ from app.db import (
     User,
     get_db,
     is_admin_email,
+    normalize_email,
     utcnow,
 )
 from app.schemas import (
@@ -56,7 +57,7 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new account directly (admin-provisioned, no self-registration)."""
-    email = body.email.lower().strip()
+    email = normalize_email(body.email)
 
     # The admin role is reserved for the configured address.
     if body.role == ROLE_ADMIN and not is_admin_email(email):

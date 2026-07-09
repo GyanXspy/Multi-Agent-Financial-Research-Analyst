@@ -55,9 +55,10 @@ def test_ticker_regex_rejects_invalid(symbol):
 
 
 def test_websocket_rejects_missing_token(client):
+    """F5: WebSocket rejects unauthenticated connections (auth-before-accept)."""
     from starlette.websockets import WebSocketDisconnect
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/api/ws/stock/AAPL") as ws:
-            ws.receive_text()  # server closes with 4401 right after accept
+        with client.websocket_connect("/api/ws/stock/AAPL"):
+            pass  # Connection should be rejected before accept completes
     assert exc_info.value.code == 4401

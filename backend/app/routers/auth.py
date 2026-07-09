@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit, settings_store
-from app.db import ROLE_ADMIN, ROLE_ANALYST, User, get_db, is_admin_email
+from app.db import ROLE_ADMIN, ROLE_ANALYST, User, get_db, is_admin_email, normalize_email
 from app.rate_limit import limiter
 from app.schemas import (
     LoginRequest,
@@ -47,7 +47,7 @@ async def _token_for(db: AsyncSession, user: User) -> str:
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    email = body.email.lower().strip()
+    email = normalize_email(body.email)
 
     # Admin is decided solely by the configured address — never by signup order.
     is_admin = is_admin_email(email)
@@ -80,7 +80,7 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    email = body.email.lower().strip()
+    email = normalize_email(body.email)
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()

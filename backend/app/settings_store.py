@@ -6,8 +6,12 @@ Only settings that the application actually enforces live here. Billing,
 external integrations, and dynamic rate limits are intentionally omitted:
 there is nothing in this app to enforce them, so exposing them would be
 misleading. Add a key here only once code reads and acts on it.
+
+Includes an in-memory TTL cache (default 60 s) so hot-path callers like
+login/register don't hit the database on every request (F3 fix).
 """
 
+import time
 from typing import Any, Dict
 
 from sqlalchemy import select
@@ -25,6 +29,25 @@ DEFAULTS: Dict[str, tuple] = {
     # Overrides JWT expiry when > 0; falls back to ACCESS_TOKEN_EXPIRE_MINUTES otherwise.
     "session_timeout_minutes": (0, "int"),
 }
+
+# ─── TTL cache (F3) ──────────────────────────────────────────────────────────
+_CACHE_TTL = 60.0  # seconds
+_cache: Dict[str, tuple[Any, float]] = {}  # key -> (coerced_value, expiry_time)
+
+
+def _cache_get(key: str) -> Any | None:
+    entry = _cache.get(key)
+    if entry is not None and entry[1] > time.monotonic():
+        return entry[0]
+    return None
+
+
+def _cache_set(key: str, value: Any) -> None:
+    _cache[key] = (value, time.monotonic() + _CACHE_TTL)
+
+
+def _cache_invalidate() -> None:
+    _cache.clear()
 
 
 def _coerce(raw: str, kind: str) -> Any:
@@ -50,14 +73,23 @@ async def get_all(db: AsyncSession) -> Dict[str, Any]:
     stored = {r.key: r.value for r in rows}
     result: Dict[str, Any] = {}
     for key, (default, kind) in DEFAULTS.items():
-        result[key] = _coerce(stored[key], kind) if key in stored else default
+        value = _coerce(stored[key], kind) if key in stored else default
+        result[key] = value
+        _cache_set(key, value)
     return result
 
 
 async def get(db: AsyncSession, key: str) -> Any:
+    # Check in-memory cache first
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+
     default, kind = DEFAULTS[key]
     row = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
-    return _coerce(row.value, kind) if row is not None else default
+    value = _coerce(row.value, kind) if row is not None else default
+    _cache_set(key, value)
+    return value
 
 
 async def set_many(db: AsyncSession, updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -73,6 +105,8 @@ async def set_many(db: AsyncSession, updates: Dict[str, Any]) -> Dict[str, Any]:
         else:
             row.value = raw
     await db.commit()
+    # Invalidate the cache so subsequent reads pick up the new values
+    _cache_invalidate()
     return await get_all(db)
 
 
@@ -88,3 +122,5 @@ async def seed_defaults(db: AsyncSession) -> None:
             added = True
     if added:
         await db.commit()
+    # Invalidate stale cache entries on startup
+    _cache_invalidate()

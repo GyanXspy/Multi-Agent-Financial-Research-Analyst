@@ -163,7 +163,8 @@ async def stream_analysis(
             yield {"event": "data", "data": json.dumps(aggregated_data, default=str)}
 
             if errors:
-                yield {"event": "status", "data": f"Warning: {len(errors)} agent(s) had errors: {list(errors.keys())}"}
+                for agent_name, error_msg in errors.items():
+                    yield {"event": "status", "data": f"\u26a0 {agent_name} agent error: {error_msg}"}
 
             # ── Step 4: Stream the report ──
             yield {"event": "status", "data": "Thesis Writer Agent generating investment report..."}

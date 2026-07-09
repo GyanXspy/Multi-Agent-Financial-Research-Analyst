@@ -26,9 +26,14 @@ ROLE_ANALYST = "analyst"
 VALID_ROLES = (ROLE_ADMIN, ROLE_ANALYST)
 
 
+def normalize_email(email: str) -> str:
+    """Canonical form for email comparisons — lowercase, stripped."""
+    return email.strip().lower()
+
+
 def is_admin_email(email: str) -> bool:
     """True if `email` is the single address permitted to be admin (case-insensitive)."""
-    return email.strip().lower() == settings.ADMIN_EMAIL.strip().lower()
+    return normalize_email(email) == normalize_email(settings.ADMIN_EMAIL)
 
 
 class Base(DeclarativeBase):

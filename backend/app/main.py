@@ -27,7 +27,7 @@ from starlette.responses import JSONResponse
 from sqlalchemy import select
 
 from app.config import settings
-from app.db import ROLE_ADMIN, ROLE_ANALYST, User, async_session_factory, init_db, is_admin_email
+from app.db import ROLE_ADMIN, ROLE_ANALYST, User, async_session_factory, init_db, is_admin_email, normalize_email
 from app.rate_limit import limiter
 from app.routers import admin as admin_router
 from app.routers import auth as auth_router
@@ -48,25 +48,35 @@ SYMBOL_RE = re.compile(r"^\^?[A-Z0-9.\-]{1,12}$")
 
 async def reconcile_admin() -> None:
     """
-    Enforce the single-admin invariant on every startup:
-    - the configured ADMIN_EMAIL, if it exists, is set to 'admin';
-    - any other account left as 'admin' (e.g. from the old first-user rule) is
-      demoted to 'analyst'.
+    Enforce the single-admin invariant on every startup with targeted queries
+    instead of loading the full user table:
+    1. Promote the configured ADMIN_EMAIL to 'admin' if it exists but isn't admin.
+    2. Demote any other accounts that are still marked 'admin'.
     Also seed default system settings.
     """
+    admin_email = normalize_email(settings.ADMIN_EMAIL)
     async with async_session_factory() as db:
-        users = (await db.execute(select(User))).scalars().all()
         changed = False
-        for user in users:
-            if is_admin_email(user.email):
-                if user.role != ROLE_ADMIN:
-                    user.role = ROLE_ADMIN
-                    changed = True
-                    logger.info("Startup: promoted configured admin %s", user.email)
-            elif user.role == ROLE_ADMIN:
-                user.role = ROLE_ANALYST
-                changed = True
-                logger.warning("Startup: demoted stray admin %s -> analyst", user.email)
+
+        # Promote the designated admin if they exist but lack the admin role
+        result = await db.execute(
+            select(User).where(User.email == admin_email, User.role != ROLE_ADMIN)
+        )
+        admin_user = result.scalar_one_or_none()
+        if admin_user is not None:
+            admin_user.role = ROLE_ADMIN
+            changed = True
+            logger.info("Startup: promoted configured admin %s", admin_user.email)
+
+        # Demote any stray admins (accounts that shouldn't be admin)
+        result = await db.execute(
+            select(User).where(User.email != admin_email, User.role == ROLE_ADMIN)
+        )
+        for user in result.scalars().all():
+            user.role = ROLE_ANALYST
+            changed = True
+            logger.warning("Startup: demoted stray admin %s -> analyst", user.email)
+
         if changed:
             await db.commit()
         await seed_defaults(db)
@@ -140,7 +150,7 @@ async def health():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# WebSocket Live Price Feed
+# WebSocket Live Price Feed — shared subscription manager
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_latest_bar(symbol: str) -> dict | None:
@@ -160,52 +170,118 @@ def _fetch_latest_bar(symbol: str) -> dict | None:
     }
 
 
+class PriceSubscriptionManager:
+    """
+    Shares a single polling loop per symbol across all connected WebSocket
+    clients.  When the first client subscribes to a symbol a background task
+    is created; when the last client unsubscribes, the task is cancelled.
+    """
+
+    def __init__(self, poll_interval: float = 5.0):
+        self._poll_interval = poll_interval
+        # symbol -> set of WebSocket objects
+        self._subscribers: dict[str, set[WebSocket]] = {}
+        # symbol -> background polling Task
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._lock = asyncio.Lock()
+
+    async def subscribe(self, symbol: str, ws: WebSocket) -> None:
+        async with self._lock:
+            if symbol not in self._subscribers:
+                self._subscribers[symbol] = set()
+            self._subscribers[symbol].add(ws)
+            if symbol not in self._tasks or self._tasks[symbol].done():
+                self._tasks[symbol] = asyncio.create_task(self._poll_loop(symbol))
+
+    async def unsubscribe(self, symbol: str, ws: WebSocket) -> None:
+        async with self._lock:
+            subs = self._subscribers.get(symbol)
+            if subs:
+                subs.discard(ws)
+                if not subs:
+                    del self._subscribers[symbol]
+                    task = self._tasks.pop(symbol, None)
+                    if task and not task.done():
+                        task.cancel()
+
+    async def _poll_loop(self, symbol: str) -> None:
+        """Fetch price data on a schedule and broadcast to all subscribers."""
+        while True:
+            try:
+                price_data = await asyncio.to_thread(_fetch_latest_bar, symbol)
+                payload = price_data or {
+                    "symbol": symbol,
+                    "error": "Market may be closed — no intraday data available.",
+                }
+            except Exception as e:
+                logger.warning("Price fetch error for %s: %s", symbol, e)
+                payload = {"symbol": symbol, "error": "Price fetch failed"}
+
+            # Broadcast to all subscribers; collect stale connections for cleanup
+            async with self._lock:
+                subs = self._subscribers.get(symbol, set()).copy()
+            stale: list[WebSocket] = []
+            for ws in subs:
+                try:
+                    await ws.send_json(payload)
+                except Exception:
+                    stale.append(ws)
+            if stale:
+                async with self._lock:
+                    current = self._subscribers.get(symbol)
+                    if current:
+                        for ws in stale:
+                            current.discard(ws)
+                        if not current:
+                            del self._subscribers[symbol]
+                            task = self._tasks.pop(symbol, None)
+                            if task and not task.done():
+                                task.cancel()
+                            return
+
+            await asyncio.sleep(self._poll_interval)
+
+
+# Singleton manager
+price_manager = PriceSubscriptionManager()
+
+
 @app.websocket("/api/ws/stock/{symbol}")
 async def websocket_stock_price(websocket: WebSocket, symbol: str):
     """
-    Streams live price data for a symbol. Requires ?token=<JWT>.
-    Fetches fresh 1-minute bars every 5 seconds without blocking the event loop.
+    Streams live price data for a symbol.  Requires ?token=<JWT>.
+    Authentication is validated BEFORE accepting the connection to prevent
+    unauthenticated connection floods (F5 fix).
     """
-    await websocket.accept()
-
-    async with async_session_factory() as db:
-        user = await authenticate_websocket(websocket, db)
-    if user is None:
-        return
-
+    # ── Validate symbol format before any connection work ──
     symbol = symbol.upper().strip()
     if not SYMBOL_RE.match(symbol):
         await websocket.close(code=4400, reason="Invalid symbol format")
         return
 
+    # ── Authenticate BEFORE accepting (F5) ──
+    async with async_session_factory() as db:
+        user = await authenticate_websocket(websocket, db)
+    if user is None:
+        return  # authenticate_websocket already sent close(4401)
+
+    # ── Accept only after successful auth ──
+    await websocket.accept()
     logger.info("WebSocket connected for %s (user=%s)", symbol, user.email)
 
+    # ── Subscribe to the shared price feed (F6) ──
+    await price_manager.subscribe(symbol, websocket)
     try:
+        # Keep the connection alive; the subscription manager handles sending.
         while True:
-            try:
-                price_data = await asyncio.to_thread(_fetch_latest_bar, symbol)
-                if price_data:
-                    await websocket.send_json(price_data)
-                else:
-                    await websocket.send_json({
-                        "symbol": symbol,
-                        "error": "Market may be closed — no intraday data available.",
-                    })
-            except WebSocketDisconnect:
-                raise
-            except RuntimeError:
-                # Socket already closing/closed — stop the loop quietly
-                break
-            except Exception as e:
-                logger.warning("WebSocket fetch error for %s: %s", symbol, e)
-                await websocket.send_json({"symbol": symbol, "error": "Price fetch failed"})
-
-            await asyncio.sleep(5.0)
-
+            # Wait for client messages (pong/close); ignore content.
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for %s", symbol)
+        logger.info("WebSocket disconnected for %s (user=%s)", symbol, user.email)
     except Exception as e:
         logger.error("WebSocket error for %s: %s", symbol, e)
+    finally:
+        await price_manager.unsubscribe(symbol, websocket)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
