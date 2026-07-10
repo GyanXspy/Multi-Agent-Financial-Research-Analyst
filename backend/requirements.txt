@@ -15,7 +15,21 @@ aiomysql>=0.2.0
 PyJWT>=2.8.0
 bcrypt>=4.1.0
 slowapi>=0.1.9
+google-auth>=2.20.0
+
+# --- Production infrastructure ---
+alembic>=1.13.0
+redis[hiredis]>=5.0.0
+arq>=0.26.0
+gunicorn>=22.0.0
+prometheus-fastapi-instrumentator>=7.0.0
+sentry-sdk[fastapi]>=2.0.0
+tenacity>=8.3.0
+python-json-logger>=2.0.0
 
 # --- Test dependencies ---
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
+
+# --- Load testing (optional, install when needed) ---
+# locust>=2.29.0

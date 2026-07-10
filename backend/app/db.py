@@ -1,8 +1,9 @@
 """
 Database layer — async SQLAlchemy engine, ORM models, and session dependency.
 
-Uses MySQL via aiomysql by default (see settings.DATABASE_URL). Tables are
-created on application startup (see main.py lifespan).
+Uses MySQL via aiomysql by default (see settings.DATABASE_URL).
+Schema is managed by Alembic migrations (see alembic/).
+Connection pool is tuned for production throughput.
 """
 
 from datetime import datetime, timezone
@@ -18,7 +19,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=settings.DB_POOL_RECYCLE,
+)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 ROLE_ADMIN = "admin"
@@ -45,7 +53,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True, nullable=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default=ROLE_ANALYST)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -97,9 +106,15 @@ class SystemSetting(Base):
 
 
 async def init_db() -> None:
-    """Create all tables if they don't exist. Called on app startup."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """
+    Create all tables if they don't exist.
+
+    NOTE: In production, use Alembic migrations instead.
+    This is kept as a convenience for local development only.
+    """
+    if settings.is_development:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

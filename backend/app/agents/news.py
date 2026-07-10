@@ -2,6 +2,11 @@
 News Agent — Retrieves recent financial news, filters for financial
 materiality using an LLM, and tags catalyst sentiment.
 
+Production features:
+- Redis caching (prevents redundant NewsAPI / LLM calls)
+- Resilient LLM calls with timeouts and retries
+- Request coalescing for concurrent requests on same symbol
+
 Data sources (in priority order):
 1. NewsAPI (https://newsapi.org) — primary, requires NEWS_API_KEY.
 2. Google News RSS — free fallback when the key is missing or NewsAPI fails.
@@ -16,7 +21,9 @@ import httpx
 from bs4 import BeautifulSoup
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from app import cache
 from app.config import settings
+from app.resilience import resilient_ainvoke
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +38,26 @@ class NewsAgent:
             model=settings.NEWS_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.1,
-            max_retries=3,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     async def collect(self, symbol: str) -> Dict[str, Any]:
         """
         Fetch recent news articles for the symbol and filter for materiality.
+        Results are cached in Redis to prevent redundant API and LLM calls.
 
         Returns a dict with key 'articles' (list of material articles with
         title, summary, url, source, catalyst) and 'provider' (which source was used).
         """
+        cache_key = f"news:{symbol}"
+
+        async def _fetch():
+            return await self._collect_uncached(symbol)
+
+        return await cache.get_or_set(cache_key, settings.CACHE_TTL_NEWS, _fetch)
+
+    async def _collect_uncached(self, symbol: str) -> Dict[str, Any]:
+        """Core collection logic — fetches from news sources and filters with LLM."""
         logger.info("NewsAgent: fetching news for %s", symbol)
 
         # Strip exchange suffixes for cleaner search queries (e.g., RELIANCE.NS → RELIANCE)
@@ -161,7 +178,9 @@ Return ONLY a valid JSON array (no markdown fences, no explanation) with this sc
 If no articles are material, return an empty array: []"""
 
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await resilient_ainvoke(
+                self.llm, prompt, timeout=60, label="NewsAgent.filter"
+            )
             content = response.content.strip()
 
             # Strip markdown code fences if present

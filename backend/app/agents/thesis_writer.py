@@ -2,6 +2,10 @@
 Thesis Writer Agent — Synthesizes all agent outputs into a comprehensive,
 structured investment research report in Markdown format.
 
+Production features:
+- Resilient LLM calls with timeouts and retries
+- Both full generation and streaming with per-chunk timeout
+
 Supports both full generation and token-by-token streaming.
 """
 
@@ -11,6 +15,7 @@ from typing import Any, Dict
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
+from app.resilience import resilient_ainvoke, resilient_astream
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +28,16 @@ class ThesisWriterAgent:
             model=settings.THESIS_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.3,
-            max_retries=3,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     async def generate_report(self, data: Dict[str, Any]) -> str:
         """Generate the full report in one shot. Returns the complete markdown string."""
         logger.info("ThesisWriterAgent: generating report for %s", data.get("symbol"))
         prompt = self._build_prompt(data)
-        response = await self.llm.ainvoke(prompt)
+        response = await resilient_ainvoke(
+            self.llm, prompt, timeout=settings.LLM_TIMEOUT, label="ThesisWriter.generate"
+        )
         logger.info("ThesisWriterAgent: report generation complete for %s", data.get("symbol"))
         return response.content
 
@@ -42,7 +49,9 @@ class ThesisWriterAgent:
         logger.info("ThesisWriterAgent: streaming report for %s", data.get("symbol"))
         prompt = self._build_prompt(data)
 
-        async for chunk in self.llm.astream(prompt):
+        async for chunk in resilient_astream(
+            self.llm, prompt, timeout=settings.LLM_TIMEOUT, label="ThesisWriter.stream"
+        ):
             if chunk.content:
                 yield chunk.content
 

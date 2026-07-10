@@ -13,12 +13,16 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from app import audit, settings_store
+from app.config import settings
 from app.db import ROLE_ADMIN, ROLE_ANALYST, User, get_db, is_admin_email, normalize_email
 from app.rate_limit import limiter
 from app.schemas import (
     LoginRequest,
+    GoogleLoginRequest,
     RegisterRequest,
     RoleUpdateRequest,
     TokenResponse,
@@ -92,6 +96,62 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
     logger.info("Auth: login %s", email)
     await audit.record(db, audit.LOGIN, actor=user, request=request)
+    token = await _token_for(db, user)
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.post("/google", response_model=TokenResponse)
+@limiter.limit("10/minute")
+async def login_google(request: Request, body: GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google OAuth is not configured on the server.")
+    
+    try:
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(
+            body.credential, 
+            google_requests.Request(), 
+            settings.GOOGLE_CLIENT_ID
+        )
+        
+        email = normalize_email(idinfo["email"])
+        google_id = idinfo["sub"]
+        
+    except ValueError as e:
+        logger.warning(f"Invalid Google token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+        
+    # Check if user exists by google_id or email
+    result = await db.execute(select(User).where((User.google_id == google_id) | (User.email == email)))
+    user = result.scalars().first()
+    
+    if not user:
+        # Create new user
+        is_admin = is_admin_email(email)
+        
+        registration_open = await settings_store.get(db, "registration_open")
+        if not registration_open and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Registration is currently closed. Contact an administrator.",
+            )
+            
+        role = ROLE_ADMIN if is_admin else ROLE_ANALYST
+        user = User(email=email, google_id=google_id, role=role)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        logger.info("Auth: registered %s via Google (role=%s)", email, role)
+        await audit.record(db, audit.REGISTER, actor=user, target=email, detail=f"role={role} via Google", request=request)
+    else:
+        # User exists, link google_id if not linked
+        if not user.google_id:
+            user.google_id = google_id
+            await db.commit()
+            await db.refresh(user)
+        logger.info("Auth: login %s via Google", email)
+        await audit.record(db, audit.LOGIN, actor=user, detail="via Google", request=request)
+        
     token = await _token_for(db, user)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 

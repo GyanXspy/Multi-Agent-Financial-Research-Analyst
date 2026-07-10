@@ -2,8 +2,10 @@
 Financial Data Agent — Retrieves quantitative financial information
 from Yahoo Finance (yfinance) and computes valuation & operational metrics.
 
-All yfinance calls are blocking, so they run in a worker thread via
-asyncio.to_thread — this keeps the multi-agent fan-out genuinely parallel.
+Production features:
+- Redis caching with configurable TTL (prevents redundant yfinance calls)
+- Request coalescing (one fetch per symbol, even under concurrent load)
+- Timeout on blocking yfinance calls
 """
 
 import asyncio
@@ -11,6 +13,9 @@ import logging
 from typing import Any, Dict
 
 import yfinance as yf
+
+from app import cache
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +37,30 @@ class FinancialDataAgent:
     async def collect(self, symbol: str) -> Dict[str, Any]:
         """
         Collect financial data for the given ticker symbol.
+        Results are cached in Redis (TTL from config) to prevent redundant fetches.
 
         Returns a dictionary containing current price, valuation metrics,
         operational metrics, and recent price history.
         """
+        cache_key = f"fin:{symbol}"
+
+        async def _fetch():
+            return await self._collect_uncached(symbol)
+
+        return await cache.get_or_set(cache_key, settings.CACHE_TTL_FINANCIAL, _fetch)
+
+    async def _collect_uncached(self, symbol: str) -> Dict[str, Any]:
+        """Core collection logic — fetches from yfinance and computes metrics."""
         logger.info("FinancialDataAgent: collecting data for %s", symbol)
 
         try:
-            bundle = await asyncio.to_thread(_fetch_all, symbol)
+            bundle = await asyncio.wait_for(
+                asyncio.to_thread(_fetch_all, symbol),
+                timeout=settings.YFINANCE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("FinancialDataAgent: yfinance timeout for %s after %ds", symbol, settings.YFINANCE_TIMEOUT)
+            return {"error": f"Data fetch timed out after {settings.YFINANCE_TIMEOUT}s"}
         except Exception as e:
             logger.error("FinancialDataAgent: failed to fetch data for %s: %s", symbol, e)
             return {"error": str(e)}

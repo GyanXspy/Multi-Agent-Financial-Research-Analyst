@@ -1,11 +1,19 @@
 """
 Research router — the multi-agent analysis endpoints.
 
-1. POST /api/research/analyze      — Blocking REST endpoint (auth required)
-2. GET  /api/research/stream       — SSE streaming (auth via ?token=)
-3. GET  /api/research/history      — List past reports (own; admin sees all)
-4. GET  /api/research/history/{id} — Fetch a stored report
-Completed analyses are persisted to the reports table.
+Production features:
+- Async job queue (ARQ): POST /analyze returns 202 with job_id
+- GET /analyze/{job_id}: poll job status/result
+- SSE streaming: subscribes to worker progress via Redis pub/sub
+- Inline fallback when Redis/ARQ unavailable (dev mode)
+- All results cached in Redis
+
+Endpoints:
+1. POST /api/research/analyze      — Enqueue analysis job (auth required)
+2. GET  /api/research/analyze/{id} — Poll job status/result
+3. GET  /api/research/stream       — SSE streaming (auth via ?token=)
+4. GET  /api/research/history      — List past reports (own; admin sees all)
+5. GET  /api/research/history/{id} — Fetch a stored report
 """
 
 import asyncio
@@ -19,7 +27,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agents.coordinator import CoordinatorAgent
 from app.db import ROLE_ADMIN, Report, User, async_session_factory, get_db
-from app.rate_limit import limiter
+from app.rate_limit import limiter, user_key_func
 from app.schemas import (
     ReportDetail,
     ReportSummary,
@@ -55,22 +63,60 @@ async def _save_report(user_id: int, symbol: str, query: str, report_md: str, da
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Blocking REST Endpoint
+# 1. Async Analysis Endpoint (Job Queue)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.post("/analyze", response_model=ResearchResponse)
-@limiter.limit("5/minute")
+@router.post("/analyze", response_model=ResearchResponse, status_code=200)
+@limiter.limit("5/minute", key_func=user_key_func)
 async def analyze_stock(
     request: Request,
     body: ResearchRequest,
     user: User = Depends(get_current_user),
 ):
-    """Run the full multi-agent pipeline and return the complete research report."""
+    """
+    Run the full multi-agent pipeline.
+
+    When ARQ/Redis is available: enqueues the job and returns 202 with job_id.
+    When unavailable (dev): runs inline and returns the complete result.
+    """
     logger.info("REST /analyze — user=%s query=%s", user.email, body.query)
+
+    # Try job queue first
+    try:
+        from app.job_queue import enqueue_analysis, run_inline, get_job_status
+        from app.config import settings
+
+        if settings.REDIS_URL:
+            # Production mode: enqueue and return immediately
+            result = await enqueue_analysis(user.id, body.query, body.query)
+
+            if result.get("status") == "rejected":
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=result.get("message", "Too many concurrent analyses"),
+                )
+
+            # Return 202 Accepted with job_id for polling
+            from starlette.responses import JSONResponse
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "job_id": result["job_id"],
+                    "status": result["status"],
+                    "message": "Analysis queued. Poll GET /api/research/analyze/{job_id} for results.",
+                },
+            )
+    except ImportError:
+        pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Job queue unavailable (%s), falling back to inline execution", e)
+
+    # Fallback: inline execution (dev mode / no Redis)
     try:
         result = await coordinator.run(body.query)
     except ValueError as e:
-        # Ticker resolution/validation failures are client errors
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception:
         logger.exception("REST /analyze failed")
@@ -87,11 +133,30 @@ async def analyze_stock(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 1b. Job Status Polling
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/analyze/{job_id}")
+async def get_analysis_status(
+    job_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Poll the status of an enqueued analysis job."""
+    try:
+        from app.job_queue import get_job_status
+        result = await get_job_status(job_id)
+        return result
+    except Exception as e:
+        logger.warning("Job status check failed for %s: %s", job_id, e)
+        return {"status": "unknown", "error": str(e)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 2. SSE Streaming Endpoint
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/stream")
-@limiter.limit("5/minute")
+@limiter.limit("5/minute", key_func=user_key_func)
 async def stream_analysis(
     request: Request,
     query: str = Query(..., min_length=1, max_length=200),

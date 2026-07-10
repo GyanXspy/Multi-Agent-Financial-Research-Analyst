@@ -1,6 +1,11 @@
 """
 Peer Comparison Agent — Identifies industry peers and computes
 relative valuation metrics for competitive analysis.
+
+Production features:
+- Redis caching with 60-min TTL
+- Request coalescing for concurrent requests
+- Timeout on blocking yfinance calls
 """
 
 import asyncio
@@ -8,6 +13,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import yfinance as yf
+
+from app import cache
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +46,29 @@ class PeerComparisonAgent:
     async def collect(self, symbol: str) -> Dict[str, Any]:
         """
         Identify peers and fetch comparable financial metrics.
-        Peer lookups run concurrently in worker threads.
+        Results are cached in Redis with a 60-min TTL.
 
         Returns a dict with 'sector', 'target' metrics, and 'peers' list.
         """
+        cache_key = f"peers:{symbol}"
+
+        async def _fetch():
+            return await self._collect_uncached(symbol)
+
+        return await cache.get_or_set(cache_key, settings.CACHE_TTL_PEERS, _fetch)
+
+    async def _collect_uncached(self, symbol: str) -> Dict[str, Any]:
+        """Core collection logic — fetches peer data from yfinance."""
         logger.info("PeerComparisonAgent: collecting peers for %s", symbol)
 
         try:
-            main_info = await asyncio.to_thread(_fetch_info, symbol)
+            main_info = await asyncio.wait_for(
+                asyncio.to_thread(_fetch_info, symbol),
+                timeout=settings.YFINANCE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("PeerComparisonAgent: yfinance timeout for %s", symbol)
+            return {"sector": "Unknown", "target": {}, "peers": [], "error": "Data fetch timed out"}
         except Exception as e:
             logger.error("PeerComparisonAgent: failed to fetch info for %s: %s", symbol, e)
             return {"sector": "Unknown", "target": {}, "peers": [], "error": str(e)}
@@ -59,12 +82,18 @@ class PeerComparisonAgent:
         # Get peer symbols — exclude the target company
         peer_symbols = self._get_peers(sector, symbol)
 
-        # Fetch all peers concurrently
+        # Fetch all peers concurrently with timeouts
         async def fetch_peer(peer_sym: str) -> Optional[Dict[str, Any]]:
             try:
-                peer_info = await asyncio.to_thread(_fetch_info, peer_sym)
+                peer_info = await asyncio.wait_for(
+                    asyncio.to_thread(_fetch_info, peer_sym),
+                    timeout=settings.YFINANCE_TIMEOUT,
+                )
                 metrics = self._extract_metrics(peer_info, peer_sym)
                 return metrics if metrics.get("market_cap") else None
+            except asyncio.TimeoutError:
+                logger.warning("PeerComparisonAgent: timeout fetching peer %s", peer_sym)
+                return None
             except Exception as e:
                 logger.warning("PeerComparisonAgent: failed to fetch peer %s: %s", peer_sym, e)
                 return None

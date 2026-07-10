@@ -2,6 +2,10 @@
 Coordinator Agent — Central orchestrator that interprets user queries,
 identifies the target ticker, runs specialized worker agents in parallel,
 aggregates results, and invokes the Thesis Writer for final report generation.
+
+Production features:
+- Resilient LLM calls with timeouts and retries
+- Cached results via Redis (with in-memory fallback)
 """
 
 import asyncio
@@ -17,6 +21,7 @@ from app.agents.filings import FilingsAgent
 from app.agents.peer_comparison import PeerComparisonAgent
 from app.agents.thesis_writer import ThesisWriterAgent
 from app.config import settings
+from app.resilience import resilient_ainvoke
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +47,7 @@ class CoordinatorAgent:
             model=settings.COORDINATOR_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.1,
-            max_retries=3,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
         self.financial_agent = FinancialDataAgent()
         self.news_agent = NewsAgent()
@@ -132,7 +137,9 @@ Examples:
 
 Return only the ticker symbol:"""
 
-        response = await self.llm.ainvoke(prompt)
+        response = await resilient_ainvoke(
+            self.llm, prompt, timeout=30, label="CoordinatorAgent.identify_ticker"
+        )
         symbol = response.content.strip().upper()
 
         # Clean up any extra formatting the LLM might add

@@ -78,6 +78,10 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=128)
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(..., description="Google ID token")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

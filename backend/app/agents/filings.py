@@ -2,6 +2,11 @@
 Filings Agent — Fetches and analyzes corporate disclosures (SEC EDGAR filings).
 Extracts MD&A and Risk Factors sections, summarises with LLM.
 
+Production features:
+- Redis caching with 60-min TTL (filings change infrequently)
+- Resilient LLM calls with timeouts and retries
+- Request coalescing for concurrent requests
+
 NOTE: For MVP, this agent uses SEC EDGAR's full-text search API. If filings
 are not found (e.g., for non-US stocks), it returns a graceful fallback.
 """
@@ -15,7 +20,9 @@ import httpx
 from bs4 import BeautifulSoup
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from app import cache
 from app.config import settings
+from app.resilience import resilient_ainvoke
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +67,25 @@ class FilingsAgent:
             model=settings.FILINGS_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0.1,
-            max_retries=3,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     async def collect(self, symbol: str) -> Dict[str, Any]:
         """
         Fetch and analyze the latest SEC filing for the given symbol.
+        Results are cached in Redis with a 60-min TTL.
 
         Returns a dict with 'summary', 'risks', 'strategic_shifts', and 'source'.
         """
+        cache_key = f"filings:{symbol}"
+
+        async def _fetch():
+            return await self._collect_uncached(symbol)
+
+        return await cache.get_or_set(cache_key, settings.CACHE_TTL_FILINGS, _fetch)
+
+    async def _collect_uncached(self, symbol: str) -> Dict[str, Any]:
+        """Core collection logic — fetches from EDGAR and summarizes with LLM."""
         logger.info("FilingsAgent: collecting filings for %s", symbol)
 
         # Strip exchange suffixes for EDGAR lookup (e.g., AAPL, not AAPL.NS)
@@ -168,7 +185,9 @@ Return your analysis as a structured JSON object (no markdown fences):
 }}"""
 
         try:
-            response = await self.llm.ainvoke(prompt)
+            response = await resilient_ainvoke(
+                self.llm, prompt, timeout=90, label="FilingsAgent.summarize"
+            )
             content = response.content.strip()
 
             # Strip markdown code fences if present
