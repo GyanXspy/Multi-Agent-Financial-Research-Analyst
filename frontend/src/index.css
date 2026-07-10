@@ -1,35 +1,147 @@
 @import "tailwindcss";
 
-/* ─── Design System Theme ───
-   Fonts:  Space Grotesk (display) + Inter (body), loaded in index.html
-   Palette: "ink" — deep blue-black neutrals + emerald/teal accents           */
-@theme {
-  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+:root {
+  --card: hsl(0, 0%, 100%);
+  --ring: hsl(0, 100%, 45%);
+  --input: hsl(0, 0%, 100%);
+  --muted: hsl(0, 0%, 96%);
+  --accent: hsl(45, 100%, 50%);
+  --border: hsl(0, 0%, 0%);
+  --radius: 0px;
+  --chart-1: hsl(0, 0%, 0%);
+  --chart-2: hsl(0, 100%, 45%);
+  --chart-3: hsl(45, 100%, 50%);
+  --chart-4: hsl(120, 20%, 35%);
+  --chart-5: hsl(20, 40%, 40%);
+  --popover: hsl(0, 0%, 100%);
+  --primary: hsl(0, 100%, 43%);
+  --sidebar: hsl(0, 0%, 98%);
+  --spacing: 0.25rem;
+  --font-mono: 'SF Mono', 'Courier New', monospace;
+  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --secondary: hsl(0, 0%, 0%);
+  --background: hsl(0, 0%, 100%);
+  --font-serif: 'Georgia', serif;
+  --foreground: hsl(0, 0%, 0%);
+  --destructive: hsl(0, 100%, 40%);
+  --shadow-blur: 0px;
+  --shadow-color: hsl(0, 0%, 0%);
+  --sidebar-ring: hsl(0, 100%, 45%);
+  --shadow-spread: 0px;
+  --letter-spacing: -0.02em;
+  --shadow-opacity: 1;
+  --sidebar-accent: hsl(0, 0%, 90%);
+  --sidebar-border: hsl(0, 0%, 0%);
+  --card-foreground: hsl(0, 0%, 0%);
+  --shadow-offset-x: 3px;
+  --shadow-offset-y: 3px;
+  --sidebar-primary: hsl(0, 100%, 45%);
+  --muted-foreground: hsl(0, 0%, 40%);
+  --accent-foreground: hsl(0, 0%, 0%);
+  --popover-foreground: hsl(0, 0%, 0%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-foreground: hsl(0, 0%, 0%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent-foreground: hsl(0, 0%, 0%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+}
 
-  /* Neutral scale (ink) */
-  --color-ink-100: #e7ecf4;
-  --color-ink-200: #cbd5e4;
-  --color-ink-300: #a4b2c8;
-  --color-ink-400: #7c8aa5;
-  --color-ink-500: #5a6781;
-  --color-ink-600: #414d64;
-  --color-ink-700: #2e394e;
-  --color-ink-800: #1e2637;
-  --color-ink-900: #131a28;
-  --color-ink-950: #0a0f1a;
+.dark {
+  --card: hsl(0, 0%, 4%);
+  --ring: hsl(0, 100%, 50%);
+  --input: hsl(0, 0%, 0%);
+  --muted: hsl(0, 0%, 12%);
+  --accent: hsl(45, 100%, 55%);
+  --border: hsl(0, 0%, 100%);
+  --radius: 0px;
+  --chart-1: hsl(0, 0%, 100%);
+  --chart-2: hsl(0, 100%, 50%);
+  --chart-3: hsl(45, 100%, 55%);
+  --chart-4: hsl(120, 15%, 45%);
+  --chart-5: hsl(20, 30%, 50%);
+  --popover: hsl(0, 0%, 4%);
+  --primary: hsl(0, 100%, 50%);
+  --sidebar: hsl(0, 0%, 2%);
+  --spacing: 0.25rem;
+  --font-mono: 'SF Mono', 'Courier New', monospace;
+  --font-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --secondary: hsl(0, 0%, 100%);
+  --background: hsl(0, 0%, 0%);
+  --font-serif: 'Georgia', serif;
+  --foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 100%, 60%);
+  --shadow-blur: 0px;
+  --shadow-color: hsl(0, 0%, 100%);
+  --sidebar-ring: hsl(0, 100%, 50%);
+  --shadow-spread: 0px;
+  --letter-spacing: -0.02em;
+  --shadow-opacity: 1;
+  --sidebar-accent: hsl(0, 0%, 15%);
+  --sidebar-border: hsl(0, 0%, 100%);
+  --card-foreground: hsl(0, 0%, 100%);
+  --shadow-offset-x: 3px;
+  --shadow-offset-y: 3px;
+  --sidebar-primary: hsl(0, 100%, 50%);
+  --muted-foreground: hsl(0, 0%, 70%);
+  --accent-foreground: hsl(0, 0%, 0%);
+  --popover-foreground: hsl(0, 0%, 100%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-foreground: hsl(0, 0%, 100%);
+  --secondary-foreground: hsl(0, 0%, 0%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent-foreground: hsl(0, 0%, 100%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+}
 
-  /* Accents */
-  --color-emerald-300: #6ee7b7;
-  --color-emerald-400: #34d399;
-  --color-emerald-500: #10b981;
-  --color-teal-400: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --color-teal-600: #0d9488;
-  --color-rose-300: #fda4af;
-  --color-rose-400: #fb7185;
-  --color-rose-500: #f43f5e;
-  --color-amber-400: #fbbf24;
+@theme inline {
+  --color-card: var(--card);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-sidebar: var(--sidebar);
+  --color-secondary: var(--secondary);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-shadow-color: var(--shadow-color);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+
+  /* Set fonts */
+  --font-mono: var(--font-mono);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+
+  /* Hardcode all Tailwind radius utilities to var(--radius) which is 0px */
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-full: var(--radius);
 }
 
 /* ─── Global Base Styles ─── */
@@ -46,14 +158,11 @@ html {
 
 body {
   margin: 0;
-  background-color: var(--color-ink-950);
-  color: var(--color-ink-100);
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
 }
 
-.font-display {
-  font-family: var(--font-display);
-}
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
@@ -79,21 +188,21 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-ink-900);
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-ink-700);
-  border-radius: 3px;
+  background: var(--muted);
+  border-radius: var(--radius);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ink-600);
+  background: var(--border);
 }
 
-/* ─── Markdown Prose (report body, dark theme) ─── */
+/* ─── Markdown Prose (report body) ─── */
 .prose-report {
-  color: var(--color-ink-200);
+  color: var(--muted-foreground);
   line-height: 1.75;
   font-size: 0.95rem;
 }
@@ -101,25 +210,31 @@ body {
 .prose-report h1,
 .prose-report h2,
 .prose-report h3 {
-  font-family: var(--font-display);
-  color: #ffffff;
+  font-family: var(--font-sans);
+  color: var(--foreground);
   font-weight: 700;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--letter-spacing);
 }
 
-.prose-report > :first-child {
+.prose-report> :first-child {
   margin-top: 0;
 }
 
-.prose-report h1 { font-size: 1.6rem; }
+.prose-report h1 {
+  font-size: 1.6rem;
+}
+
 .prose-report h2 {
   font-size: 1.25rem;
-  border-bottom: 1px solid var(--color-ink-800);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 0.35em;
 }
-.prose-report h3 { font-size: 1.05rem; }
+
+.prose-report h3 {
+  font-size: 1.05rem;
+}
 
 .prose-report p {
   margin: 0.75em 0;
@@ -145,71 +260,91 @@ body {
 }
 
 .prose-report th {
-  background-color: var(--color-ink-800);
-  color: var(--color-emerald-300);
+  background-color: var(--muted);
+  color: var(--foreground);
   padding: 0.6em 0.85em;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid var(--color-ink-700);
+  border-bottom: 2px solid var(--border);
   white-space: nowrap;
 }
 
 .prose-report td {
   padding: 0.55em 0.85em;
-  border-bottom: 1px solid var(--color-ink-800);
+  border-bottom: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
 }
 
 .prose-report tr:hover td {
-  background-color: var(--color-ink-900);
+  background-color: var(--muted);
 }
 
 .prose-report strong {
-  color: #ffffff;
+  color: var(--foreground);
   font-weight: 600;
 }
 
 .prose-report code {
-  background-color: var(--color-ink-800);
+  background-color: var(--muted);
+  color: var(--foreground);
   padding: 0.15em 0.4em;
-  border-radius: 4px;
+  border-radius: var(--radius);
   font-size: 0.85em;
 }
 
 .prose-report blockquote {
-  border-left: 3px solid var(--color-emerald-500);
+  border-left: 3px solid var(--primary);
   padding-left: 1em;
   margin-left: 0;
-  color: var(--color-ink-300);
+  color: var(--muted-foreground);
   font-style: italic;
 }
 
 .prose-report hr {
   border: none;
-  border-top: 1px solid var(--color-ink-800);
+  border-top: 1px solid var(--border);
   margin: 1.5em 0;
 }
 
 .prose-report a {
-  color: var(--color-emerald-400);
+  color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 /* ─── Animations ─── */
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-pulse-dot {
@@ -217,7 +352,7 @@ body {
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, var(--color-ink-800) 25%, var(--color-ink-700) 50%, var(--color-ink-800) 75%);
+  background: linear-gradient(90deg, var(--muted) 25%, var(--background) 50%, var(--muted) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -228,6 +363,7 @@ body {
 
 /* ─── Reduced motion ─── */
 @media (prefers-reduced-motion: reduce) {
+
   .animate-pulse-dot,
   .animate-shimmer,
   .animate-fade-in,

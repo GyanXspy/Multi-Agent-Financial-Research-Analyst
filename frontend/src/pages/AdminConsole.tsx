@@ -41,9 +41,9 @@ function fmtDate(iso: string): string {
 
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="bg-ink-900 border border-ink-800 rounded-2xl shadow-lg">
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-ink-800">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-ink-400">{title}</h2>
+    <section className="bg-card border border-border  shadow-lg">
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h2>
         {action}
       </div>
       <div className="p-5">{children}</div>
@@ -54,7 +54,7 @@ function Panel({ title, action, children }: { title: string; action?: React.Reac
 function ErrorLine({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <div role="alert" className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl px-3.5 py-2.5 mb-3">
+    <div role="alert" className="bg-destructive/10 border border-destructive/30 text-rose-300 text-xs  px-3.5 py-2.5 mb-3">
       {message}
     </div>
   );
@@ -63,7 +63,7 @@ function ErrorLine({ message }: { message: string }) {
 function RoleBadge({ role }: { role: string }) {
   const admin = role === 'admin';
   return (
-    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${admin ? 'bg-emerald-500/15 text-emerald-300' : 'bg-ink-800 text-ink-400'}`}>
+    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5  ${admin ? 'bg-primary/15 text-emerald-300' : 'bg-muted text-muted-foreground'}`}>
       {role}
     </span>
   );
@@ -92,16 +92,16 @@ function OverviewPanel() {
 
       <Panel title="Recent Activity">
         {stats && stats.recent_events.length === 0 && (
-          <p className="text-ink-500 text-sm">No recorded events yet.</p>
+          <p className="text-muted-foreground text-sm">No recorded events yet.</p>
         )}
-        <ul className="divide-y divide-ink-800/70">
+        <ul className="divide-y divide-border/70">
           {stats?.recent_events.map((e) => (
             <li key={e.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
               <div className="min-w-0">
-                <span className="text-ink-200 font-medium">{e.action}</span>
-                {e.target && <span className="text-ink-500"> · {e.target}</span>}
+                <span className="text-muted-foreground font-medium">{e.action}</span>
+                {e.target && <span className="text-muted-foreground"> · {e.target}</span>}
               </div>
-              <span className="text-ink-500 text-[11px] shrink-0">{fmtDate(e.created_at)}</span>
+              <span className="text-muted-foreground text-[11px] shrink-0">{fmtDate(e.created_at)}</span>
             </li>
           ))}
         </ul>
@@ -194,7 +194,7 @@ function UsersPanel() {
             onChange={(e) => setNewEmail(e.target.value)}
             placeholder="new.user@example.com"
             aria-label="New user email"
-            className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-ink-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40"
+            className="flex-1 bg-background border border-border  px-4 py-2.5 text-sm text-foreground placeholder-ink-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-ring/40"
           />
           <input
             type="password"
@@ -204,12 +204,12 @@ function UsersPanel() {
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Temp password (≥ 8 chars)"
             aria-label="New user password"
-            className="flex-1 bg-ink-950 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-ink-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40"
+            className="flex-1 bg-background border border-border  px-4 py-2.5 text-sm text-foreground placeholder-ink-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-ring/40"
           />
           <button
             type="submit"
             disabled={creating}
-            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-ink-800 disabled:to-ink-800 disabled:text-ink-500 text-ink-950 text-sm font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400 whitespace-nowrap"
+            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-primary/80 hover:to-teal-400 disabled:from-ink-800 disabled:to-ink-800 disabled:text-muted-foreground text-ink-950 text-sm font-bold px-5 py-2.5  transition-all cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400 whitespace-nowrap"
           >
             {creating ? 'Creating…' : 'Create'}
           </button>
@@ -223,26 +223,26 @@ function UsersPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-ink-500 text-[11px] uppercase tracking-wider border-b border-ink-800">
+              <tr className="text-left text-muted-foreground text-[11px] uppercase tracking-wider border-b border-border">
                 <th className="py-2 pr-3 font-semibold">Email</th>
                 <th className="py-2 px-3 font-semibold">Role</th>
                 <th className="py-2 px-3 font-semibold hidden sm:table-cell">Joined</th>
                 <th className="py-2 pl-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-ink-800/70">
+            <tbody className="divide-y divide-border/70">
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td className="py-2.5 pr-3 text-ink-200 truncate max-w-[240px]" title={u.email}>
+                  <td className="py-2.5 pr-3 text-muted-foreground truncate max-w-[240px]" title={u.email}>
                     {u.email}
-                    {u.id === me?.id && <span className="text-ink-500 text-[11px]"> (you)</span>}
+                    {u.id === me?.id && <span className="text-muted-foreground text-[11px]"> (you)</span>}
                   </td>
                   <td className="py-2.5 px-3"><RoleBadge role={u.role} /></td>
-                  <td className="py-2.5 px-3 text-ink-500 text-[11px] hidden sm:table-cell">{fmtDate(u.created_at)}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground text-[11px] hidden sm:table-cell">{fmtDate(u.created_at)}</td>
                   <td className="py-2.5 pl-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => handleReset(u)}
-                      className="text-[11px] text-ink-400 hover:text-white underline mr-3 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline mr-3 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
                     >
                       reset password
                     </button>
@@ -250,7 +250,7 @@ function UsersPanel() {
                       onClick={() => handleDelete(u)}
                       disabled={u.id === me?.id || u.role === 'admin'}
                       title={u.role === 'admin' ? 'The designated admin cannot be deleted' : undefined}
-                      className="text-[11px] text-rose-400 hover:text-rose-300 underline cursor-pointer disabled:text-ink-700 disabled:no-underline disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-rose-400"
+                      className="text-[11px] text-destructive hover:text-rose-300 underline cursor-pointer disabled:text-ink-700 disabled:no-underline disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-rose-400"
                     >
                       delete
                     </button>
@@ -299,30 +299,30 @@ function ReportsPanel() {
         <div>
           <button
             onClick={() => setSelected(null)}
-            className="text-xs text-ink-400 hover:text-white underline mb-3 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+            className="text-xs text-muted-foreground hover:text-foreground underline mb-3 cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
           >
             ← Back to list
           </button>
-          <h3 className="text-white font-semibold text-sm mb-2">{selectedTitle}</h3>
-          <pre className="whitespace-pre-wrap text-ink-300 text-xs bg-ink-950/60 border border-ink-800 rounded-xl p-4 max-h-[60vh] overflow-auto">
+          <h3 className="text-foreground font-semibold text-sm mb-2">{selectedTitle}</h3>
+          <pre className="whitespace-pre-wrap text-muted-foreground text-xs bg-background/60 border border-border  p-4 max-h-[60vh] overflow-auto">
             {selected}
           </pre>
         </div>
       ) : reports.length === 0 ? (
-        <p className="text-ink-500 text-sm">No reports have been generated yet.</p>
+        <p className="text-muted-foreground text-sm">No reports have been generated yet.</p>
       ) : (
-        <ul className="divide-y divide-ink-800/70">
+        <ul className="divide-y divide-border/70">
           {reports.map((r) => (
             <li key={r.id}>
               <button
                 onClick={() => open(r)}
-                className="w-full flex items-center justify-between gap-3 py-2.5 text-left hover:bg-ink-800/40 rounded-lg px-2 -mx-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+                className="w-full flex items-center justify-between gap-3 py-2.5 text-left hover:bg-muted/40  px-2 -mx-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
               >
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-ink-200">{r.symbol}</span>
-                  <span className="block text-[11px] text-ink-500 truncate">{r.query}</span>
+                  <span className="block text-sm font-semibold text-muted-foreground">{r.symbol}</span>
+                  <span className="block text-[11px] text-muted-foreground truncate">{r.query}</span>
                 </span>
-                <span className="text-ink-500 text-[11px] shrink-0">{fmtDate(r.created_at)}</span>
+                <span className="text-muted-foreground text-[11px] shrink-0">{fmtDate(r.created_at)}</span>
               </button>
             </li>
           ))}
@@ -367,7 +367,7 @@ function AuditPanel() {
           value={action}
           onChange={(e) => { setAction(e.target.value); setOffset(0); }}
           aria-label="Filter by action"
-          className="bg-ink-950 border border-ink-700 rounded-lg px-2.5 py-1.5 text-xs text-ink-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
+          className="bg-background border border-border  px-2.5 py-1.5 text-xs text-muted-foreground focus:outline-none focus:border-primary cursor-pointer"
         >
           {AUDIT_ACTIONS.map((a) => (
             <option key={a || 'all'} value={a}>{a || 'all actions'}</option>
@@ -379,7 +379,7 @@ function AuditPanel() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-ink-500 text-[11px] uppercase tracking-wider border-b border-ink-800">
+            <tr className="text-left text-muted-foreground text-[11px] uppercase tracking-wider border-b border-border">
               <th className="py-2 pr-3 font-semibold">When</th>
               <th className="py-2 px-3 font-semibold">Actor</th>
               <th className="py-2 px-3 font-semibold">Action</th>
@@ -387,30 +387,30 @@ function AuditPanel() {
               <th className="py-2 pl-3 font-semibold hidden md:table-cell">IP</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-ink-800/70">
+          <tbody className="divide-y divide-border/70">
             {entries.map((e) => (
               <tr key={e.id}>
-                <td className="py-2.5 pr-3 text-ink-500 text-[11px] whitespace-nowrap">{fmtDate(e.created_at)}</td>
-                <td className="py-2.5 px-3 text-ink-300 truncate max-w-[180px]" title={e.actor_email}>{e.actor_email || '—'}</td>
-                <td className="py-2.5 px-3 text-ink-200">{e.action}</td>
-                <td className="py-2.5 px-3 text-ink-400 truncate max-w-[180px]" title={e.detail || e.target}>{e.target || '—'}</td>
+                <td className="py-2.5 pr-3 text-muted-foreground text-[11px] whitespace-nowrap">{fmtDate(e.created_at)}</td>
+                <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]" title={e.actor_email}>{e.actor_email || '—'}</td>
+                <td className="py-2.5 px-3 text-muted-foreground">{e.action}</td>
+                <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[180px]" title={e.detail || e.target}>{e.target || '—'}</td>
                 <td className="py-2.5 pl-3 text-ink-600 text-[11px] hidden md:table-cell">{e.ip || '—'}</td>
               </tr>
             ))}
             {entries.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-ink-500 text-sm">No events match this filter.</td></tr>
+              <tr><td colSpan={5} className="py-6 text-center text-muted-foreground text-sm">No events match this filter.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <div className="flex items-center justify-between mt-4 text-xs text-ink-500">
+      <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
         <span>{total} event{total === 1 ? '' : 's'}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             disabled={page <= 1}
-            className="px-3 py-1.5 rounded-lg border border-ink-800 hover:bg-ink-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+            className="px-3 py-1.5  border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
           >
             Prev
           </button>
@@ -418,7 +418,7 @@ function AuditPanel() {
           <button
             onClick={() => setOffset(offset + PAGE_SIZE)}
             disabled={page >= pages}
-            className="px-3 py-1.5 rounded-lg border border-ink-800 hover:bg-ink-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+            className="px-3 py-1.5  border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
           >
             Next
           </button>
@@ -465,30 +465,30 @@ function SettingsPanel() {
       {notice && <p className="text-emerald-300 text-xs mb-3">{notice}</p>}
 
       {!settings ? (
-        <p className="text-ink-500 text-sm">Loading…</p>
+        <p className="text-muted-foreground text-sm">Loading…</p>
       ) : (
         <div className="space-y-5">
           {/* Registration toggle */}
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-ink-200 text-sm font-medium">Open self-registration</p>
-              <p className="text-ink-500 text-[11px]">When off, only the configured admin address may sign up.</p>
+              <p className="text-muted-foreground text-sm font-medium">Open self-registration</p>
+              <p className="text-muted-foreground text-[11px]">When off, only the configured admin address may sign up.</p>
             </div>
             <button
               role="switch"
               aria-checked={settings.registration_open}
               disabled={saving}
               onClick={() => patch({ registration_open: !settings.registration_open })}
-              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400 ${settings.registration_open ? 'bg-emerald-500' : 'bg-ink-700'}`}
+              className={`relative w-11 h-6  transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400 ${settings.registration_open ? 'bg-primary' : 'bg-ink-700'}`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${settings.registration_open ? 'translate-x-5' : ''}`} />
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5  bg-white transition-transform ${settings.registration_open ? 'translate-x-5' : ''}`} />
             </button>
           </div>
 
           {/* Session timeout */}
-          <div className="border-t border-ink-800 pt-5">
-            <p className="text-ink-200 text-sm font-medium mb-1">Session timeout (minutes)</p>
-            <p className="text-ink-500 text-[11px] mb-2.5">Overrides JWT expiry when &gt; 0. Use 0 to keep the server default.</p>
+          <div className="border-t border-border pt-5">
+            <p className="text-muted-foreground text-sm font-medium mb-1">Session timeout (minutes)</p>
+            <p className="text-muted-foreground text-[11px] mb-2.5">Overrides JWT expiry when &gt; 0. Use 0 to keep the server default.</p>
             <div className="flex gap-2.5">
               <input
                 type="number"
@@ -496,19 +496,19 @@ function SettingsPanel() {
                 max={10080}
                 value={timeout}
                 onChange={(e) => setTimeoutValue(e.target.value)}
-                className="w-32 bg-ink-950 border border-ink-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40"
+                className="w-32 bg-background border border-border  px-4 py-2 text-sm text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-ring/40"
               />
               <button
                 onClick={() => patch({ session_timeout_minutes: Math.max(0, Math.min(10080, Number(timeout) || 0)) })}
                 disabled={saving}
-                className="bg-ink-800 hover:bg-ink-700 text-ink-100 text-sm font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400"
+                className="bg-muted hover:bg-muted text-foreground text-sm font-semibold px-4 py-2  transition-colors cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-400"
               >
                 Save
               </button>
             </div>
           </div>
 
-          <p className="text-ink-600 text-[11px] border-t border-ink-800 pt-4">
+          <p className="text-ink-600 text-[11px] border-t border-border pt-4">
             Only settings this application actually enforces are shown. Billing, external
             integrations, and dynamic rate-limit policies are intentionally omitted — there is
             nothing here to enforce them.
@@ -526,38 +526,38 @@ export default function AdminConsole({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('Overview');
 
   return (
-    <div className="min-h-screen bg-ink-950 text-ink-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="border-b border-ink-800/70 bg-ink-950/80 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-border/70 bg-background/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex justify-between items-center gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0" aria-hidden="true">
+            <div className="w-8 h-8  bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shrink-0" aria-hidden="true">
               <svg className="w-4 h-4 text-ink-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div className="min-w-0">
-              <h1 className="font-display text-base sm:text-lg font-bold tracking-tight text-white truncate">
+              <h1 className="font-display text-base sm:text-lg font-bold tracking-tight text-foreground truncate">
                 Admin Console
               </h1>
-              <p className="text-ink-500 text-[11px] hidden sm:block">Manage users, oversight & system configuration</p>
+              <p className="text-muted-foreground text-[11px] hidden sm:block">Manage users, oversight & system configuration</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <button
               onClick={onExit}
-              className="text-xs text-ink-300 hover:text-white bg-ink-900 hover:bg-ink-800 border border-ink-800 px-3 py-2 rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+              className="text-xs text-muted-foreground hover:text-foreground bg-card hover:bg-muted border border-border px-3 py-2  transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
             >
               Research View
             </button>
             <div className="text-right hidden sm:block">
-              <span className="block text-xs text-ink-300 max-w-[160px] truncate" title={user?.email}>{user?.email}</span>
-              <span className="block text-[10px] text-emerald-400/80 uppercase tracking-wider">{user?.role}</span>
+              <span className="block text-xs text-muted-foreground max-w-[160px] truncate" title={user?.email}>{user?.email}</span>
+              <span className="block text-[10px] text-primary/80 uppercase tracking-wider">{user?.role}</span>
             </div>
             <button
               onClick={logout}
-              className="text-xs text-ink-400 hover:text-white bg-ink-900 hover:bg-ink-800 border border-ink-800 px-3 py-2 rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+              className="text-xs text-muted-foreground hover:text-foreground bg-card hover:bg-muted border border-border px-3 py-2  transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
             >
               Sign Out
             </button>
@@ -573,7 +573,7 @@ export default function AdminConsole({ onExit }: { onExit: () => void }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={`px-3.5 py-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400 ${
-                tab === t ? 'border-emerald-400 text-white' : 'border-transparent text-ink-400 hover:text-ink-200'
+                tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-muted-foreground'
               }`}
             >
               {t}

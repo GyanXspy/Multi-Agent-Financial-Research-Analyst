@@ -65,9 +65,9 @@ export default function PriceChart({ prices, dates = [], currency = 'USD' }: Pri
   const hover = hoverIdx != null ? geom.pts[hoverIdx] : null;
 
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 shadow-lg animate-fade-in">
+    <div className="bg-card border border-border  p-5 shadow-lg animate-fade-in">
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Price History · 1 Year
         </h3>
         <span className={`text-sm font-bold tabular-nums ${up ? 'text-emerald-300' : 'text-rose-300'}`}>
@@ -104,11 +104,11 @@ export default function PriceChart({ prices, dates = [], currency = 'USD' }: Pri
         )}
       </svg>
 
-      <div className="flex justify-between items-center mt-2 text-xs text-ink-400 tabular-nums">
+      <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground tabular-nums">
         {hoverIdx != null ? (
           <>
             <span>{dates[hoverIdx] ? formatDate(dates[hoverIdx]) : `Week ${hoverIdx + 1}`}</span>
-            <span className="font-semibold text-white">{symbol}{prices[hoverIdx].toFixed(2)}</span>
+            <span className="font-semibold text-foreground">{symbol}{prices[hoverIdx].toFixed(2)}</span>
           </>
         ) : (
           <>

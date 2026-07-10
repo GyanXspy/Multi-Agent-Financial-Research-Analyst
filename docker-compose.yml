@@ -1,0 +1,86 @@
+# ── Docker Compose for local development ──
+# Provides the full production-like stack locally:
+# API server, ARQ worker, Redis, and MySQL.
+#
+# Usage:
+#   docker-compose up           — start all services
+#   docker-compose up api       — start API only (uses host Redis/MySQL)
+#   docker-compose up worker    — start worker only
+
+services:
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── MySQL ──
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: sql24
+      MYSQL_DATABASE: stockanalyst
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI (web tier) ──
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=mysql+aiomysql://root:sql24@mysql/stockanalyst
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_FORMAT=text
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── ARQ Worker (analysis pipeline processor) ──
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=mysql+aiomysql://root:sql24@mysql/stockanalyst
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_FORMAT=text
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  mysql_data:

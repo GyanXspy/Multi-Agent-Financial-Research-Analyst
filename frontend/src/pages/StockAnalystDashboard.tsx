@@ -71,9 +71,9 @@ function formatMetric(val: number | undefined | null, suffix = ''): string {
 /* ─── Skeleton loader ─── */
 function SkeletonCards() {
   return (
-    <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 shadow-lg grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-hidden="true">
+    <div className="bg-card border border-border  p-5 shadow-lg grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-hidden="true">
       {[...Array(6)].map((_, i) => (
-        <div key={i} className="bg-ink-950/60 px-4 py-3.5 rounded-xl border border-ink-800">
+        <div key={i} className="bg-background/60 px-4 py-3.5  border border-border">
           <div className="h-2.5 w-14 mb-2 rounded animate-shimmer" />
           <div className="h-5 w-20 rounded animate-shimmer" />
         </div>
@@ -238,21 +238,19 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
   const currencySymbol = financials?.currency === 'INR' ? '₹' : '$';
 
   return (
-    <div className="min-h-screen bg-ink-950 text-ink-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* ── Header ── */}
-      <header className="border-b border-ink-800/70 bg-ink-950/80 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-border/70 bg-background/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex justify-between items-center gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shrink-0" aria-hidden="true">
-              <svg className="w-4 h-4 text-ink-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8M15 7h6v6" />
-              </svg>
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-14 h-14 flex items-center justify-center shrink-0" aria-hidden="true">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-sm" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-display text-base sm:text-lg font-bold tracking-tight text-white truncate">
+              <h1 className="font-display text-base sm:text-lg font-bold tracking-tight text-foreground truncate">
                 Multi-Agent Financial Analyst
               </h1>
-              <p className="text-ink-500 text-[11px] hidden sm:block">
+              <p className="text-muted-foreground text-[11px] hidden sm:block">
                 Real-time AI equity research · Gemini powered
               </p>
             </div>
@@ -261,21 +259,21 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {/* Live price widget */}
             {livePrice && (
-              <div className="hidden md:block bg-ink-900/80 border border-ink-800 rounded-xl px-4 py-2 text-right animate-fade-in">
+              <div className="hidden md:block bg-card/80 border border-border  px-4 py-2 text-right animate-fade-in">
                 <div className="flex items-center gap-1.5 justify-end mb-0.5">
                   <span
-                    className={`inline-block w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-emerald-400 animate-pulse-dot' : 'bg-rose-400'}`}
+                    className={`inline-block w-1.5 h-1.5  ${wsConnected ? 'bg-emerald-400 animate-pulse-dot' : 'bg-rose-400'}`}
                     role="status"
                     aria-label={wsConnected ? 'Live feed connected' : 'Live feed disconnected'}
                   />
-                  <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
                     {resolvedSymbol} · Live
                   </span>
                 </div>
                 <span className="text-lg font-bold text-emerald-300 tabular-nums">
                   {currencySymbol}{livePrice.price.toFixed(2)}
                 </span>
-                <div className="text-[9px] text-ink-500 tabular-nums">
+                <div className="text-[9px] text-muted-foreground tabular-nums">
                   H {currencySymbol}{livePrice.high.toFixed(2)} · L {currencySymbol}{livePrice.low.toFixed(2)} · Vol {livePrice.volume.toLocaleString()}
                 </div>
               </div>
@@ -286,18 +284,18 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
               {onOpenAdmin && (
                 <button
                   onClick={onOpenAdmin}
-                  className="text-xs text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 px-3 py-2 rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+                  className="text-xs text-emerald-300 hover:text-emerald-200 bg-primary/10 hover:bg-primary/15 border border-primary/30 px-3 py-2  transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
                 >
                   Admin Console
                 </button>
               )}
               <div className="text-right hidden sm:block">
-                <span className="block text-xs text-ink-300 max-w-[160px] truncate" title={user?.email}>{user?.email}</span>
-                <span className="block text-[10px] text-emerald-400/80 uppercase tracking-wider">{user?.role}</span>
+                <span className="block text-xs text-muted-foreground max-w-[160px] truncate" title={user?.email}>{user?.email}</span>
+                <span className="block text-[10px] text-primary/80 uppercase tracking-wider">{user?.role}</span>
               </div>
               <button
                 onClick={logout}
-                className="text-xs text-ink-400 hover:text-white bg-ink-900 hover:bg-ink-800 border border-ink-800 px-3 py-2 rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
+                className="text-xs text-muted-foreground hover:text-foreground bg-card hover:bg-muted border border-border px-3 py-2  transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-400"
               >
                 Sign Out
               </button>
@@ -311,8 +309,8 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
         {/* ── Left Panel ── */}
         <div className="lg:col-span-3 space-y-4">
           {/* Search form */}
-          <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 shadow-lg">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-ink-400 mb-3">
+          <div className="bg-card border border-border  p-5 shadow-lg">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
               Start Research
             </h2>
             <form onSubmit={handleSearch} className="space-y-3">
@@ -324,18 +322,18 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 maxLength={200}
-                className="w-full bg-ink-950 border border-ink-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-ink-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40 transition-colors"
+                className="w-full bg-background border border-border  px-4 py-2.5 text-sm text-foreground placeholder-ink-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-ring/40 transition-colors"
                 required
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={loading || !query.trim()}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-ink-800 disabled:to-ink-800 disabled:text-ink-500 text-ink-950 text-sm font-bold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-500/10 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-primary/80 hover:to-teal-400 disabled:from-ink-800 disabled:to-ink-800 disabled:text-muted-foreground text-ink-950 text-sm font-bold py-2.5  transition-all shadow-md shadow-primary/10 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-full border-2 border-ink-950/30 border-t-ink-950 animate-spin" aria-hidden="true" />
+                    <span className="w-3.5 h-3.5  border-2 border-ink-950/30 border-t-ink-950 animate-spin" aria-hidden="true" />
                     Analyzing…
                   </span>
                 ) : 'Analyze'}
@@ -343,7 +341,7 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
             </form>
 
             {pipelineError && (
-              <div role="alert" className="mt-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl px-3.5 py-2.5">
+              <div role="alert" className="mt-3 bg-destructive/10 border border-destructive/30 text-rose-300 text-xs  px-3.5 py-2.5">
                 {pipelineError}
               </div>
             )}
@@ -356,8 +354,8 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
 
           {/* History */}
           {history.length > 0 && (
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 shadow-lg">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400 mb-3">
+            <div className="bg-card border border-border  p-5 shadow-lg">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
                 Recent Reports
               </h3>
               <ul className="space-y-1.5">
@@ -366,10 +364,10 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
                     <button
                       onClick={() => loadHistoryReport(r.id)}
                       disabled={loading}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-ink-800/70 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-emerald-400 group"
+                      className="w-full text-left px-3 py-2  hover:bg-muted/70 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-emerald-400 group"
                     >
-                      <span className="block text-sm font-semibold text-ink-200 group-hover:text-white">{r.symbol}</span>
-                      <span className="block text-[11px] text-ink-500 truncate">
+                      <span className="block text-sm font-semibold text-muted-foreground group-hover:text-foreground">{r.symbol}</span>
+                      <span className="block text-[11px] text-muted-foreground truncate">
                         {r.query} · {new Date(r.created_at + 'Z').toLocaleDateString()}
                       </span>
                     </button>
@@ -387,13 +385,13 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
           {loading && !financials && <SkeletonCards />}
 
           {financials && (
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-5 shadow-lg animate-fade-in">
+            <div className="bg-card border border-border  p-5 shadow-lg animate-fade-in">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   {financials.company_name || resolvedSymbol} — Key Metrics
                 </h3>
                 {financials.sector && (
-                  <span className="text-[10px] bg-ink-800 text-ink-400 px-2.5 py-1 rounded-full">
+                  <span className="text-[10px] bg-muted text-muted-foreground px-2.5 py-1 ">
                     {financials.sector}{financials.industry ? ` · ${financials.industry}` : ''}
                   </span>
                 )}
@@ -422,7 +420,7 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
           {report ? (
             <Suspense
               fallback={
-                <div className="bg-ink-900 border border-ink-800 rounded-2xl p-8 shadow-lg" aria-hidden="true">
+                <div className="bg-card border border-border  p-8 shadow-lg" aria-hidden="true">
                   <div className="h-6 w-1/2 rounded animate-shimmer" />
                 </div>
               }
@@ -430,11 +428,11 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
               <ReportView report={report} symbol={resolvedSymbol} streaming={loading} />
             </Suspense>
           ) : !loading ? (
-            <div className="bg-ink-900/40 border border-dashed border-ink-800 rounded-2xl px-8 py-16 text-center">
+            <div className="bg-card/40 border border-dashed border-border  px-8 py-16 text-center">
               <svg className="w-12 h-12 mx-auto mb-4 text-ink-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p className="text-ink-400 text-sm max-w-md mx-auto">
+              <p className="text-muted-foreground text-sm max-w-md mx-auto">
                 Enter a stock ticker or company name to generate a real-time, AI-assembled investment research report.
               </p>
               <p className="text-ink-600 text-xs mt-2">
@@ -445,7 +443,7 @@ export default function StockAnalystDashboard({ onOpenAdmin }: { onOpenAdmin?: (
 
           {/* Report streaming skeleton */}
           {loading && !report && financials && (
-            <div className="bg-ink-900 border border-ink-800 rounded-2xl p-8 shadow-lg" aria-hidden="true">
+            <div className="bg-card border border-border  p-8 shadow-lg" aria-hidden="true">
               <div className="space-y-3">
                 <div className="h-6 w-3/4 rounded animate-shimmer" />
                 <div className="h-4 w-full rounded animate-shimmer" />
