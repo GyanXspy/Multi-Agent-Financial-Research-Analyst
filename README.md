@@ -1,3 +1,8 @@
+
+
+https://github.com/user-attachments/assets/9d133837-acd7-4f5f-a0a2-944d146a6acc
+
+
 # Multi-Agent Financial Research Analyst
 
 An autonomous multi-agent system designed to collect, validate, analyze, and synthesize financial data to produce professional-grade investment research reports. Built using **LangChain**, the **Google Agent Development Kit (ADK)**, and **Gemini Family Models**.
